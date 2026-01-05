@@ -1,0 +1,71 @@
+---
+title: "bulk_day15_UCP1_expr"
+author: "Sarah Hazell Pickering"
+date: "2025-01-21"
+output: html_document
+---
+
+```{r}
+library(here); i_am("analysis/bulk/bulk_day15_UCP1_expr.Rmd")
+figdir = here("output/bulk/plots")
+if (!dir.exists(figdir)){dir.create(figdir, recursive = T)}
+knitr::opts_knit$set(dev=c("png","pdf"))
+```
+
+```{r message=FALSE, warning=FALSE, echo=TRUE}
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+theme_set(theme_classic(base_size=20) + 
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth=0.25)))
+library(stringr)
+library(viridis)
+library(ggbeeswarm)
+pal = c("#DA1819", "#00AED1", "#434D51","#EBB400","#691A93","#3AAD00")
+```
+
+
+```{r}
+load(file=url("https://raw.githubusercontent.com/sarahhp/splicing_thermogenesis/refs/heads/main/03limma/rpkm_rep_for_plotting.RData"))
+head(long)
+sig = read.delim(file="https://raw.githubusercontent.com/sarahhp/splicing_thermogenesis/main/03limma/any_and_all_donor_DGE.tsv")
+sig[sig$gene_name == "UCP1",]
+filter(sig, gene_name == "UCP1") %>% select(matches("adj.P.Val|logFC"))
+```
+^ p-values from limma DEG analysis < 1.36 x 10^-5
+
+
+```{r ucp1}
+long = mutate(long, subject=gsub("subject","S", donor))
+
+ggplot(filter(long, gene_name == "UCP1"), 
+         aes(x=subject, y=fpkm, fill=condition)) +
+    geom_bar(stat = "summary", fun=mean, position=position_dodge2(preserve="single"))  + 
+    geom_beeswarm(dodge.width=0.9, cex=1.5) + 
+    scale_fill_manual(values = c("#1F78B4","#FF7F00"))
+ggsave(here(figdir, "UCP1_RNA_expr.pdf"))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

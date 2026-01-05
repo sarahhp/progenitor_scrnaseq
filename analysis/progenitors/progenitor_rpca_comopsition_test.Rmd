@@ -1,0 +1,318 @@
+---
+title: "progenitor_rpca_comopsition_test"
+author: "Sarah Hazell Pickering"
+date: "2025-02-05"
+output: html_document
+---
+
+
+```{r}
+module="progenitors"
+dataname = "rpca"
+library(here);i_am(file.path("analysis",paste(module,sep="_",dataname, "clusters_and_markers.Rmd")))
+
+odir = here("output", module, dataname) 
+
+load_data = T #Loading initial seurat analysis
+subset_data =  F
+```
+
+
+
+```{r libs}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggsci)
+
+library(Seurat)
+library(BPCells)
+```
+
+
+```{r themes}
+pal = c("#DA1819", "#00AED1", "#434D51","#EBB400","#691A93","#3AAD00")
+clusters = ggsci::pal_simpsons()(13)[c(1:7,9:13)]
+spectral =  rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
+		theme_set(theme_classic(base_size=15) + 
+		  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth=0.25)))
+```
+
+```{r}
+clcomp = read.delim(here(odir, "cluster_composition.txt"), colClasses = list(seurat_clusters="factor"))
+head(clcomp)
+if (subset_data){
+  filt = readRDS(here(odir, "10%_complete_analysis.rds"))
+} else{
+  filt = readRDS(here(odir, "complete_analysis.rds"))
+}
+filt
+```
+
+## Proportion test
+ the null tested is that the proportions in each group are the same. 
+With such a large n, even clusters 5 and 6 that have a really similar proportion of cells come out as significant.  e.g. standard deviation is < 1%
+
+```{r}
+donor_counts = group_by(clcomp, donor_id) %>% summarise(total=sum(n_cells))
+donor_counts
+```
+
+
+```{r}
+clu_tests = list()
+for (clu in 0:(length(levels(clcomp$seurat_clusters))-1)){
+  clu_counts = filter(clcomp, seurat_clusters == clu) %>% pull(n_cells)
+  res = prop.test(clu_counts, donor_counts$total)
+  clu_tests[[paste0("p",clu)]] = res
+}
+clu_tests
+
+```
+
+
+## Pairwise prop test
+because all the individual comparsions are not necessarily significant
+Now we've got to apply p-value adjustment.  
+```{r}
+subject_pairs = list(1:2,c(1,3),c(1,4),c(1,5),c(1,6),
+                     2:3, c(2,4),c(2,5),c(2,6),
+                     3:4,c(3,5),c(3,6),
+                     4:5, c(4,6), 5:6)
+subject_pairs = sapply(subject_pairs, function(pair) {
+  paste0("S", pair[1], ".v.S", pair[2])})
+
+clu_tests = data.frame(seurat_clusters =rep(levels(clcomp$seurat_clusters), each=15), 
+                       pvalue=NA, 
+                       subject_pairs=subject_pairs           )
+head(clu_tests)
+```
+
+
+```{r}
+pairwise.prop.test = function(names, counts, totals, name_col="donor_id"){
+  #counts table with name_col usually donor id and n_cells for the cluster in question
+  #names is a vector e.g. c("S1","S2")
+  
+  counts_filt = rename(counts, subject = all_of(name_col)) %>%filter( subject%in% names) %>% pull(n_cells)
+  totals_filt = rename(totals, subject = all_of(name_col)) %>% filter(subject %in% names) %>% pull(total)
+  res = prop.test(counts_filt, totals_filt)
+  return(res$p.value)
+}
+pairwise.prop.test(c("S1","S2"), filter(clcomp, seurat_clusters == clu), donor_counts)
+```
+
+
+```{r}
+for (clu in 0:(length(levels(clcomp$seurat_clusters))-1)){
+  clu_counts = filter(clcomp, seurat_clusters == clu)
+  pairs = c()
+  for (pair in subject_pairs){
+    subjects = stringr::str_split_1(pair[1], pattern=".v.")
+    pvalue = pairwise.prop.test(subjects, clu_counts, donor_counts)
+    print(pvalue)
+    clu_tests$pvalue[clu_tests$seurat_clusters == clu &
+                     clu_tests$subject_pairs == pair] =  pvalue
+  }
+}
+clu_tests = mutate(clu_tests, p.adjust=p.adjust(pvalue, method="fdr"))
+head(clu_tests)
+```
+
+```{r}
+adjp_mat = pivot_wider(clu_tests, id_cols=subject_pairs, names_from=seurat_clusters, values_from = p.adjust, names_prefix = "p", values_fn = function(x){round(x,4)})
+adjp_mat
+
+group_by(clu_tests,subject_pairs) %>% summarise(round(mean(p.adjust), 4))
+group_by(clu_tests,seurat_clusters) %>% summarise(round(mean(p.adjust), 4))
+```
+
+```{r}
+write.table(adjp_mat, here(odir, "pairwise_donor_composition_test.tsv"),
+            sep="\t", quote=F, row.names = F)
+```
+
+
+
+
+## permutation-based p-value
+
+```{r}
+input_tab = select(filt@meta.data, seurat_clusters, subject) 
+head(input_tab)
+set.seed(123)
+input_tab = input_tab[sample(nrow(input_tab)),]
+```
+
+
+```{r}
+compute_sd <- function(data) {
+  comp = group_by(data, seurat_clusters, subject) %>%
+      summarise(n_cells = n())
+  comp = group_by(comp, subject) %>% mutate(cells_per_subject = n_cells/sum(n_cells))
+  sd_cell_number = group_by(comp, seurat_clusters) %>% 
+    summarise(sd=sd(cells_per_subject), mean = mean(cells_per_subject)) 
+  return(sd_cell_number)
+}
+obs = compute_sd(input_tab)
+obs
+```
+
+may need to test replace and non-replace in this instance
+
+```{r message=FALSE}
+perm_stats = obs 
+for (i in 1:1000) {
+  # Shuffle the subject labels
+  df_sampled <- mutate(input_tab, shuffled_subject = sample(c("S1", "S2", "S3", "S4", "S5", "S6"),
+                                                            size=nrow(input_tab), prob =donor_counts$total, 
+                                                            replace=T))
+  #print(table(df_sampled$shuffled_subject))
+  df_sampled =  select(df_sampled, -subject) %>%
+                      rename(subject = shuffled_subject)
+    #print(head(df_sampled))
+  column = paste0("s",i,"_sd")
+  # Compute the test statistic for the permutation
+  perm_stats[column] <- compute_sd(df_sampled)$sd
+}
+head(perm_stats)
+```
+
+```{r}
+iter_tab =  select(perm_stats, seurat_clusters, grep("_sd", colnames(perm_stats), value=T)) %>%
+  pivot_longer(ends_with("sd"), names_to=c("iteration",".value"), names_pattern="(.*)_(.*)") 
+head(iter_tab)
+```
+
+```{r}
+obs$pvalue = NA
+obs$confidencei = NA 
+for (i in 1:nrow(obs)){
+  row = obs[i,]
+  single_test = filter(iter_tab, seurat_clusters==row$seurat_clusters) %>% pull(sd)
+  obs$pvalue[[i]] = mean(single_test >= row$sd)
+  obs$confidencei[[i]] = quantile(single_test, 0.99)
+}
+obs
+```
+
+
+## Plot 99% CI
+
+```{r}
+#add in subject for plotting
+#Also need the actual cells per cluster
+ci_tab = merge(obs, clcomp, by=c("seurat_clusters"), suffixes=c(".total",""))
+ci_tab
+```
+
+
+```{r}
+ggplot(clcomp, aes(x=seurat_clusters, fill=donor_id, y=cells_per_donor)) + 
+  geom_bar(position="dodge", stat='identity') +  scale_fill_manual(values=pal) 
+
+ggplot(clcomp, aes(x=seurat_clusters, fill=donor_id, y=cells_per_donor)) + 
+  geom_bar(position="dodge", stat='identity') +  scale_fill_manual(values=pal) +
+  geom_errorbar(data=ci_tab, aes(ymin=cells_per_donor-confidencei, ymax=cells_per_donor+confidencei), 
+                 position=position_dodge(0.9), width=0.4, linewidth=0.3)
+```
+
+```{r}
+
+```
+
+
+
+
+## Cohen's d
+```{r}
+library(effsize)
+s0.3 = sample(c(0,1), size=100, replace=T, prob=c(1-0.3, 0.3))
+s0.4 = sample(c(0,1), size=100, replace=T, prob=c(1-0.43, 0.43))
+summary(s0.3)
+summary(s0.4)
+cohen.d(sample(c(0,1), size=100, replace=T, prob=c(0.3, 1-0.3)), 
+        sample(c(0,1), size=100, replace=T, prob=c(0.43, 1-0.43)))
+```
+
+
+
+
+
+## compute for cell numbers
+but of course we have different cell numbers per subject; so this is not super useful 
+```{r}
+input_tab = select(filt@meta.data, seurat_clusters, subject) 
+head(input_tab)
+set.seed(123)
+input_tab = input_tab[sample(nrow(input_tab)),]
+
+compute_sd <- function(data) {
+  sd_cell_number = group_by(data, seurat_clusters, subject) %>%
+      summarise(n_cells = n(), prop=n()/sum(n())) %>% group_by(seurat_clusters) %>% summarise(sd=sd(n_cells), mean = mean(n_cells)) 
+  return(sd_cell_number)
+}
+obs = compute_sd(input_tab)
+obs
+```
+
+may need to test replace and non-replace in this instance
+
+```{r message=FALSE}
+perm_stats = obs 
+for (i in 1:1000) {
+  # Shuffle the subject labels
+  df_sampled <- mutate(input_tab, shuffled_subject = sample(c("S1", "S2", "S3", "S4", "S5", "S6"),
+                                                            size=nrow(input_tab), prob =donor_counts$total, 
+                                                            replace=T))
+  #print(table(df_sampled$shuffled_subject))
+  df_sampled =  select(df_sampled, -subject) %>%
+                      rename(subject = shuffled_subject)
+    #print(head(df_sampled))
+  column = paste0("s",i,"_sd")
+  # Compute the test statistic for the permutation
+  perm_stats[column] <- compute_sd(df_sampled)$sd
+}
+head(perm_stats)
+```
+
+```{r}
+iter_tab =  select(perm_stats, seurat_clusters, grep("_sd", colnames(perm_stats), value=T)) %>%
+  pivot_longer(ends_with("sd"), names_to=c("iteration",".value"), names_pattern="(.*)_(.*)") 
+head(iter_tab)
+```
+
+```{r}
+obs$pvalue = NA
+obs$confidencei = NA 
+for (i in 1:nrow(obs)){
+  row = obs[i,]
+  single_test = filter(iter_tab, seurat_clusters==row$seurat_clusters) %>% pull(sd)
+  obs$pvalue[[i]] = mean(single_test >= row$sd)
+  obs$confidencei[[i]] = quantile(single_test, 0.99)
+}
+obs
+```
+
+
+
+
+## Plot 99% CI
+
+```{r}
+#add in subject for plotting
+#Also need the actual cells per cluster
+ci_tab = merge(obs, clcomp, by=c("seurat_clusters"), suffixes=c(".total",""))
+ci_tab
+```
+
+
+```{r}
+ggplot(clcomp, aes(x=seurat_clusters, fill=donor_id, y=n_cells)) + 
+  geom_bar(position="dodge", stat='identity') +  scale_fill_manual(values=pal) +
+  geom_errorbar(data=ci_tab, aes(ymin=n_cells-confidencei, ymax=n_cells+confidencei), 
+                 position=position_dodge(0.9), width=0.4, linewidth=0.3)
+```
+
+

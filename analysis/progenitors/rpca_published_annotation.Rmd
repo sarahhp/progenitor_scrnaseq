@@ -1,0 +1,346 @@
+---
+title: "rpca_published_annotation"
+author: "Sarah Hazell Pickering"
+date: "2024-08-13"
+output: html_document
+---
+
+```{r params}
+module="progenitors"
+dataname = "rpca"
+library(here);i_am(file.path("analysis",paste(module,sep="_",dataname, "clusters_and_markers.Rmd")))
+odir = here("output", module, dataname) 
+
+load_data = T #Loading initial seurat analysis
+subset_data =  F
+
+if (!dir.exists(odir)){dir.create(odir, recursive = T)}
+```
+
+
+```{r libs, warning=F, message=F, echo=T}
+library(biomaRt)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggsci)
+
+library(Seurat)
+library(BPCells)
+library(HGNChelper)
+
+library(clusterProfiler)
+
+pal = c("#DA1819", "#00AED1", "#434D51","#EBB400","#691A93","#3AAD00")
+clusters = ggsci::pal_simpsons()(13)[c(1:7,9:13)]
+spectral =  rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
+```
+
+
+```{r}
+if (subset_data){
+  filt = readRDS(here(odir, "10%_complete_analysis.rds"))
+} else{
+  filt = readRDS(here(odir, "complete_analysis.rds"))
+}
+filt
+all.genes = rownames(filt)
+```
+
+
+## Read markers
+
+```{r}
+norm.markers = read.delim(file.path(odir, "marker_genes.txt"))
+norm.markers$cluster = factor(norm.markers$cluster, levels=0:max(as.integer(norm.markers$cluster)))
+uniq.norm.markers = norm.markers[!norm.markers$gene %in% names(which(table(norm.markers$gene) > 1)),]
+head(norm.markers)
+table(norm.markers$cluster)
+```
+
+
+```{r}
+liu = read.delim(here("data/other_papers/liu_2022/41421_2022_402_MOESM3_ESM.csv"), skip=1, header=T, sep=",")
+liu = liu[grep("^c[[:digit:]]*$", liu$cluster),] #eliminate metadata at the end
+liu = liu[order(liu$p_val, -liu$avg_logFC),]
+liu = separate_longer_delim(liu,gene,delim=" /// " )
+nrow(liu); tail(liu, n=10)
+liu$gene =  checkGeneSymbols(liu$gene, unmapped.as.na = F)$Suggested.Symbol
+```
+
+```{r}
+sb_clusters= read.delim(here("data/other_papers/strieder-barboza/TableS2_strieder-barboza.csv"),skip=2, sep=",")
+sb_clusters$X = NULL
+sb_clusters= separate_longer_delim(sb_clusters,gene,delim=" /// " )
+head(sb_clusters); table(sb_clusters$cluster)
+sb_clusters$gene = checkGeneSymbols(sb_clusters$gene, unmapped.as.na = F)$Suggested.Symbol
+```
+
+```{r}
+vj_clusters= read.delim(here("data/other_papers/vijay2020/Vijiay_Suppplementary_table15.csv"),skip=2, sep=",")
+vj_clusters$Gene = checkGeneSymbols(vj_clusters$Gene, unmapped.as.na = F)$Suggested.Symbol
+```
+
+```{r}
+whtk = readxl::read_excel(here("data/other_papers/whytock2022/SuppTable5_DEGs_in_SVF.xlsx"), skip = 2)
+new_colnames = rep(grep("\\.{3}", invert=T, value=T, colnames(whtk) ), each=9)
+colnames(whtk) = paste(new_colnames, whtk[1,], sep="/")
+whtk = whtk[2:nrow(whtk),]
+head(whtk)
+whtk_clusters = pivot_longer(whtk, cols=colnames(whtk), names_to=c("cluster",".value"), names_sep="/") 
+whtk_clusters$`NA` = NULL
+whtk_clusters$Gene =  checkGeneSymbols(whtk_clusters$Gene, unmapped.as.na = F)$Suggested.Symbol
+head(whtk_clusters)
+table(whtk_clusters$cluster)
+```
+
+
+
+
+## Summarise modules to show
+
+```{r}
+pub_modules = list(c0_asc_preadipo_Liu = liu$gene[liu$cluster == "c0"],
+                   c1_asc_intermediate_Liu = liu$gene[liu$cluster == "c1"],
+                   c3_asc_progenitor_Liu = liu$gene[liu$cluster == "c3"],
+                   c5_asc_mhc_Liu = liu$gene[liu$cluster == "c5"],
+                   c20_pericyte_Liu = liu$gene[liu$cluster == "c20"], #included as outgroups 
+                   c15_prolif.nkt_Liu = liu$gene[liu$cluster == "c15"],
+                   SM_asc_Strieder.Barboza = sb_clusters$gene[sb_clusters$cluster == "SM-ASC"],
+                   FA_asc_Strieder.Barboza = sb_clusters$gene[sb_clusters$cluster == "FA-ASC"],
+                   IM_asc_Strieder.Barboza = sb_clusters$gene[sb_clusters$cluster == "IM-ASC"],
+                   EC_Strieder.Barboza = sb_clusters$gene[sb_clusters$cluster == "EC"],
+                   SP1_early_ASC_VJ = vj_clusters$Gene[vj_clusters$Cluster == "SP1"],
+                   SP2_mature_ASC_VJ = vj_clusters$Gene[vj_clusters$Cluster == "SP2"],
+                   SP3_early_ASC_VJ = vj_clusters$Gene[vj_clusters$Cluster == "SP3"],
+                   SP4_ECM_VJ = vj_clusters$Gene[vj_clusters$Cluster == "SP4"],
+                   SP5_Inflam_VJ = vj_clusters$Gene[vj_clusters$Cluster == "SP5"],
+                   Stem1_whytock = whtk_clusters$Gene[whtk_clusters$cluster == "Stem 1" & whtk_clusters$avg_log2FC > 0],
+                   Stem2_whytock = whtk_clusters$Gene[whtk_clusters$cluster == "Stem 2" & whtk_clusters$avg_log2FC > 0],
+                   Stem3_whytock = whtk_clusters$Gene[whtk_clusters$cluster == "Stem 3" & whtk_clusters$avg_log2FC > 0],
+                   PreAd1_whytock = whtk_clusters$Gene[whtk_clusters$cluster == "Pre-Ad 1" & whtk_clusters$avg_log2FC > 0],
+                   PreAd2_whytock = whtk_clusters$Gene[whtk_clusters$cluster == "Pre-Ad 2" & whtk_clusters$avg_log2FC > 0])
+str(pub_modules)
+adipo_only = list(c0_asc_preadipo_Liu = liu$gene[liu$cluster == "c0"],
+                   c1_asc_intermediate_Liu = liu$gene[liu$cluster == "c1"],
+                   c3_asc_progenitor_Liu = liu$gene[liu$cluster == "c3"],
+                   c5_asc_mhc_Liu = liu$gene[liu$cluster == "c5"],
+                   SM_asc_Strieder.Barboza = sb_clusters$gene[sb_clusters$cluster == "SM-ASC"],
+                   FA_asc_Strieder.Barboza = sb_clusters$gene[sb_clusters$cluster == "FA-ASC"],
+                   IM_asc_Strieder.Barboza = sb_clusters$gene[sb_clusters$cluster == "IM-ASC"],
+                   SP1_early_ASC_VJ = vj_clusters$Gene[vj_clusters$Cluster == "SP1"],
+                   SP2_mature_ASC_VJ = vj_clusters$Gene[vj_clusters$Cluster == "SP2"],
+                   SP3_early_ASC_VJ = vj_clusters$Gene[vj_clusters$Cluster == "SP3"],
+                   SP4_ECM_VJ = vj_clusters$Gene[vj_clusters$Cluster == "SP4"],
+                   SP5_Inflam_VJ = vj_clusters$Gene[vj_clusters$Cluster == "SP5"],
+                   Stem1_whytock = whtk_clusters$Gene[whtk_clusters$cluster == "Stem 1" & whtk_clusters$avg_log2FC > 0],
+                   Stem2_whytock = whtk_clusters$Gene[whtk_clusters$cluster == "Stem 2" & whtk_clusters$avg_log2FC > 0],
+                   Stem3_whytock = whtk_clusters$Gene[whtk_clusters$cluster == "Stem 3" & whtk_clusters$avg_log2FC > 0])
+str(adipo_only)
+```
+
+
+```{r warning=F}
+filt= AddModuleScore(filt, pub_modules, name="pub", search = T, verbose=F)
+```
+
+Not found in object: AC245595.1
+The following features are still not present in the object: H4C3, H2AZ1, H1-5, H1-3, H1-2, H3C2, H2AC12, H2AC11, H2AC16, MACROH2A1
+No updated symbols foundWarning: The following features are still not present in the object: MIR145, CTD-2269F5.1
+Warning: No updated symbols foundWarning: The following features are still not present in the object: AP001347.6, MARCHF3, AC007246.3, AL163953.3
+Warning: No updated symbols foundWarning: The following features are still not present in the object: H3-3
+Warning: No updated symbols foundWarning: The following features are still not present in the object: RP11-347P5.1, H2AZ2, AC090498.1
+
+## Marker genes  and expression
+
+```{r}
+colnames(filt@meta.data)[grep("pub",colnames(filt@meta.data))] = names(pub_modules)
+names(pub_modules)
+DotPlot(filt, features=names(pub_modules), col.min=0, cols=c("lightgrey","red")) + coord_flip() #& scale_colour_gradientn(colours = spectral)
+DotPlot(filt, features=names(adipo_only), col.min=0, cols=c("lightgrey","red")) + coord_flip() #& scale_colour_gradientn(colours = spectral)
+```
+
+```{r}
+FeaturePlot(filt, features = c("SP5_Inflam_VJ","SP4_ECM_VJ","SP2_mature_ASC_VJ","SP1_early_ASC_VJ"))& scale_colour_gradientn(colours = spectral)
+FeaturePlot(filt, features = c("FA_asc_Strieder.Barboza","SM_asc_Strieder.Barboza", 
+                               "IM_asc_Streider.Barboza","EC_Strieder.Barboza")) & 
+  scale_colour_gradientn(colours = spectral)
+```
+```{r}
+FeaturePlot(filt, features = c("c3_asc_progenitor_Liu","c0_asc_preadipo_Liu", 
+                               "c1_asc_intermediate_Liu","c5_asc_mhc_Liu")) & 
+  scale_colour_gradientn(colours = spectral)
+```
+
+```{r}
+FeaturePlot(filt, features = c("Stem1_whytock","Stem2_whytock", 
+                               "Stem3_whytock","PreAd1_whytock")) & 
+  scale_colour_gradientn(colours = spectral)
+```
+
+
+```{r}
+RidgePlot(filt, features = c("SP5_Inflam_VJ"))
+
+```
+
+
+
+## Massier meta-analysis clusters
+
+```{r}
+massier = read.delim(here("data/other_papers/massier2023/Massier2023_subq_FAP_markers.txt"))
+nrow(massier); table(massier$cluster)
+summary(grepl("///",massier$gene))
+massier= separate_longer_delim(massier,gene,delim=" /// ")
+massier = filter(massier, p_val_adj < 0.01, avg_log2FC > 0.25, pct.1 > 0.1)
+nrow(massier); table(massier$cluster)
+head(massier)
+massier$gene = checkGeneSymbols(massier$gene, unmapped.as.na = F)$Suggested.Symbol
+summary(massier)
+```
+
+```{r}
+massier$clu_name = paste0("sf", massier$cluster)
+massier_modules = list()
+for (clu in 0:max(massier$cluster)){
+ massier_modules[[paste0("sf", clu)]] = filter(massier, cluster == clu) %>% pull(gene) 
+}
+str(massier_modules)
+filt= AddModuleScore(filt, massier_modules, name="massier", search = T, verbose=F)
+```
+
+
+```{r}
+colnames(filt@meta.data)[grep("massier",colnames(filt@meta.data))] = names(massier_modules)
+DotPlot(filt, features=rev(names(massier_modules)), col.min=0, cols=c("lightgrey","red")) + coord_flip()
+```
+
+## Overrepresentation of marker genes
+
+### Make tables
+```{r}
+liu_t2g = liu[ grep("c[0135]$",liu$cluster ), c("cluster","gene")]
+liu_t2g$cluster = paste("Liu2022", liu_t2g$cluster)
+head(liu_t2g)
+
+sb_t2g = sb_clusters[c("cluster","gene")]
+sb_t2g$cluster = paste("Strieder-Barboza", sb_t2g$cluster)
+head(sb_t2g)
+
+vj_t2g = vj_clusters[c("Cluster","Gene")]
+colnames(vj_t2g) = c("cluster","gene")
+vj_t2g$cluster = paste("Vijay", vj_t2g$cluster)
+head(vj_t2g)
+
+wtk_t2g = whtk_clusters[grep("Stem",whtk_clusters$cluster ), c("cluster","Gene")]
+colnames(wtk_t2g) = c("cluster","gene")
+wtk_t2g$cluster = paste("Whytock", wtk_t2g$cluster)
+head(wtk_t2g)
+```
+
+
+### ORA
+```{r}
+pub_go = compareCluster(gene~cluster, data = norm.markers,  
+                        fun="enricher", TERM2GENE = rbind(liu_t2g, sb_t2g, vj_t2g, wtk_t2g), 
+                        universe = all.genes)
+head(pub_go)[,c(2,4:10)]
+```
+
+```{r}
+nrow(pub_go)
+```
+
+```{r}
+filter(pub_go, cluster == 1) %>% head()
+filter(pub_go, cluster == 5) %>% head()
+filter(pub_go, cluster == 6) %>% head()
+```
+
+
+
+```{r}
+dotplot(pub_go)
+```
+### Dot plots
+```{r cluster_go, dev=c("png","pdf")}
+dfgo = as.data.frame(pub_go)
+dfgo$cluster = factor(dfgo$cluster, levels=0:max(as.integer(dfgo$cluster)))
+go_to_plot = dfgo %>% group_by(cluster) %>%
+              slice_min(n = 2, order_by = p.adjust) %>% arrange(cluster)
+go_to_plot$Description= factor(go_to_plot$Description, levels=rev(unique(go_to_plot$Description)))
+go_to_plot$cluster = factor(go_to_plot$cluster, levels=unique(go_to_plot$cluster))
+
+p = ggplot(go_to_plot, aes(x=cluster, y=Description, colour=cluster, size=Count)) + 
+  geom_point()+  theme_bw(base_size=15) + 
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +
+  scale_color_manual(values=clusters[as.integer(levels(go_to_plot$cluster))+1])
+p
+```
+
+```{r cluster_go_overlapping, dev=c("png","pdf")}
+include_all_plot = filter(dfgo, Description %in% go_to_plot$Description)
+include_all_plot$Description = factor(include_all_plot$Description, levels=levels(go_to_plot$Description))
+a = ggplot(include_all_plot, aes(x=cluster, y=Description, colour=cluster, size=Count)) + 
+  geom_point()+  theme_bw(base_size=15) + 
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +
+  scale_color_manual(values=clusters[as.integer(levels(go_to_plot$cluster))+1])
+a
+```
+
+## Palani et al. CD29
+All of our cells are ITGB1+ (CD29)
+
+```{r}
+RidgePlot(filt, features = "ITGB1", slot="counts")
+RidgePlot(filt, features = "ITGB1", slot="data")
+```
+
+
+## Massier GO 
+
+```{r}
+mas_t2g = massier[c("clu_name","gene")]
+colnames(mas_t2g) = c("cluster","gene")
+mas_t2g$cluster = paste("Massier", mas_t2g$cluster)
+head(mas_t2g)
+```
+
+
+```{r}
+pub_go = compareCluster(gene~cluster, data = norm.markers,  
+                        fun="enricher", TERM2GENE = mas_t2g, 
+                        universe = all.genes)
+head(pub_go)[,c(2,4:10)]
+```
+
+```{r}
+dotplot(pub_go, showCategory=3)
+```
+
+### Dot plots
+```{r massier_dot, dev=c("png","pdf")}
+dfgo = as.data.frame(pub_go)
+dfgo$cluster = factor(dfgo$cluster, levels=0:max(as.integer(dfgo$cluster)))
+go_to_plot = dfgo %>% group_by(cluster) %>%
+              slice_min(n = 2, order_by = p.adjust) %>% arrange(cluster)
+go_to_plot$Description= factor(go_to_plot$Description, levels=rev(unique(go_to_plot$Description)))
+go_to_plot$cluster = factor(go_to_plot$cluster, levels=unique(go_to_plot$cluster))
+
+p = ggplot(go_to_plot, aes(x=cluster, y=Description, colour=cluster, size=Count)) + 
+  geom_point()+  theme_bw(base_size=15) + 
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +
+  scale_color_manual(values=clusters[as.integer(levels(go_to_plot$cluster))+1])
+p
+```
+
+```{r massier_dot_overlap, dev=c("png","pdf")}
+include_all_plot = filter(dfgo, Description %in% go_to_plot$Description)
+include_all_plot$Description = factor(include_all_plot$Description, levels=levels(go_to_plot$Description))
+a = ggplot(include_all_plot, aes(x=cluster, y=Description, colour=cluster, size=Count)) + 
+  geom_point()+  theme_bw(base_size=15) + 
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +
+  scale_color_manual(values=clusters[as.integer(levels(go_to_plot$cluster))+1])
+a
+```

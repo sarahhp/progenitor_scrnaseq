@@ -1,0 +1,8 @@
+name: sceasy
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - r-sceasy
+  - anndata
+  - loompy

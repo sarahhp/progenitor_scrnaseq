@@ -1,0 +1,123 @@
+---
+title: "beige_vs_white_downsample_lazarescu"
+author: "Sarah Hazell Pickering"
+date: "2025-08-26"
+output: html_document
+---
+
+Using Azimuth to transfer cell identities found in lazarescu et al 2025 to the beige and white timecourse.  
+
+
+```{r message=FALSE, warning=FALSE}
+library(Azimuth)
+library(SeuratData)
+library(Seurat)
+library(BPCells)
+library(tidyr)
+library(ggplot2)
+```
+
+```{r}
+module="adipogenesis"
+qdataname = "beige_vs_white_downsample"
+library(here); i_am(file.path("analysis", module,paste0(qdataname,"_lazarescu.Rmd")))
+indir = here("output", module,qdataname)
+odir = here(indir,"lazarescu")
+publ_data = here("../other_data/lazarescu2025")
+if (!dir.exists(odir)){dir.create(odir, recursive = T)}
+
+subset_data =  F
+load_data = T #Load prebuilt Azimuth reference
+```
+
+```{r themes}
+pal = c("#1F78B4", "#85C2EA","#B3B3B3", "#F18486","#E31A1C")
+clusters = tvthemes::gravityFalls_pal()(13)
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
+theme_set(theme_classic(base_size=15) + 
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth=0.25)))
+figpath = here(odir,"plots")
+if (!dir.exists(figpath)){dir.create(figpath, recursive = T)}
+knitr::opts_chunk$set(dev=c('png','pdf'), fig.path=figpath)
+```
+
+
+
+## Load Query Datasets
+
+```{r}
+if (subset_data){
+  qso = readRDS(here(indir, "10%_complete_analysis.rds"))
+  k.weight=5
+} else {
+  qso = readRDS(here(indir, "complete_analysis.rds"))
+  k.weight=40
+}
+qso
+```
+
+```{r}
+DimPlot(qso, group.by = "seurat_clusters", shuffle = T) + scale_colour_manual(values = clusters)
+DimPlot(qso, group.by = "cond.time", shuffle = T) + scale_colour_manual(values = pal)
+```
+## set reference dir
+```{r}
+azdir = here(publ_data, "azimuth_reference")
+if (subset_data){
+  azdir = here(azdir, "10%_subset")
+}
+```
+
+## Map clusters
+
+Not many anchors found for mapping :/ so we're adding a kweight limit to the Run Azimuth code aka. 
+trace("RunAzimuth.Seurat", where=asNamespace("Azimuth"), edit=T)
+adding kanchors=k.weight as a param to MappingScore on ln 107
+
+```{r}
+annot <- RunAzimuth(
+    query = qso,
+    reference = azdir,
+    k.weight=k.weight)
+```
+
+```{r}
+colnames(annot@meta.data)
+table(annot$predicted.author_cell_type)
+
+summary(annot$predicted.author_cell_type.score)
+```
+
+
+```{r}
+DimPlot(annot, group.by = "predicted.author_cell_type", shuffle = T) 
+FeaturePlot(annot,"predicted.author_cell_type.score") + scale_colour_gradientn(colours =  spectral)
+```
+
+
+```{r filt_lazarescu_cell_type}
+annot$filt.lazarescu.celltype = "uncertain"
+annot$filt.lazarescu.celltype[annot$predicted.author_cell_type.score > 0.75] =  
+  annot$predicted.author_cell_type[annot$predicted.author_cell_type.score > 0.75]
+
+DimPlot(annot, group.by = "filt.lazarescu.celltype", shuffle = T) #+ scale_colour_manual(values = c("#00A087", "#E64B35","grey"))
+```
+
+
+```{r}
+VlnPlot(annot,"predicted.author_cell_type.score", group.by = "predicted.author_cell_type", pt.size = 0)
+```
+
+
+
+```{r save}
+if (subset_data == FALSE){
+  saveRDS(annot, file = here(odir, "complete_analysis.annot.rds"))
+  sub = subset(annot, downsample=1000)
+  saveRDS(sub,here(odir,"10%_complete_analysis.annot.rds"))
+} else if (subset_data){ #if subset, don't save complete analysis
+  saveRDS(annot,here(odir, "10%_subset_analysis.annot.rds"))
+}
+```
+

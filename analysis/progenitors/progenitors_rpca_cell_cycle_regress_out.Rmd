@@ -1,0 +1,130 @@
+---
+title: "progenitors_rpca_cell_cycle"
+author: "Sarah Hazell Pickering"
+date: "2024-08-12"
+output: workflowr::wflow_html
+editor_options:
+  chunk_output_type: console
+---
+
+To quantify cell cycle stage  per cell we used TinyAtlas list from https://github.com/hbc/tinyatlas for G2M and S phase genes, calculated module scores using cellCycleScoring from seurat.  Then we regressed out the changes ased on cell cycle stage to see if and of the observed gradients remained.  
+
+```{r params}
+module="progenitors"
+dataname = "initial"
+library(here);i_am(file.path("analysis",module, paste(module,sep="_", "rpca_cell_cycle_regress_out.Rmd")))
+odir = here("output", module, dataname) 
+
+load_data = T #Loading initial seurat analysis
+subset_data =  F
+
+if (!dir.exists(odir)){dir.create(odir, recursive = T)}
+```
+
+
+```{r libs, warning=F, message=F, echo=T}
+library(dplyr)
+library(ggplot2)
+library(ggsci)
+
+library(Seurat)
+library(BPCells)
+
+pal = c("#DA1819", "#00AED1", "#434D51","#EBB400","#691A93","#3AAD00")
+clusters = ggsci::pal_simpsons()(13)[c(1:7,9:13)]
+spectral =  rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
+```
+
+
+```{r}
+if (subset_data){
+  filt = readRDS(here(odir, "10%_complete_analysis.rds"))
+} else{
+  filt = readRDS(here(odir, "complete_analysis.rds"))
+}
+filt #Joined already
+```
+
+```{r}
+DimPlot(filt, group.by="subject",cols=pal)
+FeaturePlot(filt, "nCount_RNA") + scale_colour_gradientn(colors=spectral)
+```
+
+
+```{r}
+cc_path <- "data/other_papers/tiny_atlas_cell_cycle"
+g2m_genes <- readxl::read_xlsx(here(cc_path, "g2m_idmap.xlsx"))
+head(g2m_genes)
+s_genes <- readxl::read_xlsx(here(cc_path, "s_idmap.xlsx"))
+head(s_genes)
+```
+
+
+```{r}
+filt <- CellCycleScoring(filt,
+                      g2m.features = g2m_genes$symbol,
+                      s.features = s_genes$symbol)
+summary(filt$G2M.Score)
+```
+
+```{r}
+DimPlot(filt, group.by="Phase")
+FeaturePlot(filt, "G2M.Score")
+VlnPlot(filt, features=c("S.Score","G2M.Score"))
+```
+
+
+```{r}
+DimPlot(filt, group.by="Phase", reduction = "pca")
+FeaturePlot(filt, "G2M.Score", reduction = "pca")
+```
+
+
+## Rescale with cell cycle regression
+
+```{r}
+filt@assays$RNA$scale.data
+```
+
+
+```{r}
+all.genes = rownames(filt)
+
+filt = ScaleData(filt, features=all.genes, vars.to.regress =  c("S.Score", "G2M.Score", "nFeature_RNA"))
+old.variable = VariableFeatures(filt)
+filt = FindVariableFeatures(filt, )
+summary(old.variable %in% VariableFeatures(filt))
+head(old.variable[!old.variable %in% VariableFeatures(filt)], n=20)
+filt = RunPCA(filt, nfeatures.print = 5)
+```
+
+```{r}
+FeaturePlot(filt, reduction = "pca", feature="MKI67", cols=c("lightgrey","red"))
+FeaturePlot(filt, reduction = "pca", feature="S.Score", cols=c("lightgrey","red"))
+FeaturePlot(filt, reduction = "pca", feature="G2M.Score", cols=c("lightgrey","red"))
+DimPlot(filt, reduction = "pca", group.by= "seurat_clusters", cols=clusters)
+DimPlot(filt, reduction = "pca", group.by= "Phase", cols=clusters)
+```
+
+
+```{r}
+filt@assays$RNA$scale.data
+```
+
+
+```{r}
+variable.genes = VariableFeatures(filt)
+not_phase = variable.genes[!variable.genes %in% c(g2m_genes$symbol, s_genes$symbol)]
+length(not_phase)
+filt = RunPCA(filt, features = not_phase, nfeatures.print = 5)
+```
+
+```{r}
+FeaturePlot(filt, reduction = "pca", feature="MKI67", cols=c("lightgrey","red"))
+FeaturePlot(filt, reduction = "pca", feature="S.Score", cols=c("lightgrey","red"))
+FeaturePlot(filt, reduction = "pca", feature="G2M.Score", cols=c("lightgrey","red"))
+DimPlot(filt, reduction = "pca", cols=pal, group.by="subject")
+DimPlot(filt, reduction = "pca", group.by= "seurat_clusters", cols=clusters)
+DimPlot(filt, reduction = "pca", group.by= "Phase", cols=clusters)
+```
+

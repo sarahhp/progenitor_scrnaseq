@@ -1,0 +1,36 @@
+---
+title: "make_supp_table"
+author: "Sarah Hazell Pickering"
+date: "2025-07-03"
+output: html_document
+---
+
+```{r}
+library(writexl)
+library(tidyr)
+library(dplyr)
+library(here); i_am("code/make_supp_table.Rmd")
+```
+
+
+```{r}
+metadata = read.delim(here("data/Supp_tab_metadata.txt"))
+metadata = mutate(metadata, Sheet = if_else(Sheet == "", gsub("\\..*", "", basename(File)), Sheet))
+head(metadata)
+```
+
+```{r figures}
+figs = list(metadata=metadata)
+for (panel in 1:nrow(metadata)){
+  tab = read.delim(here(metadata$File[panel]))
+  figs[[metadata$Sheet[panel]]] = tab
+  #print(head(tab))
+}
+names(figs)
+```
+
+
+```{r write_supp_table}
+write_xlsx(figs, here("output/Supplementary_data.xlsx"))
+```
+

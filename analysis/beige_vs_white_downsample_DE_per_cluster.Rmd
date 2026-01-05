@@ -1,0 +1,246 @@
+---
+title: "DE_per_cluster"
+author: "Sarah Hazell Pickering"
+date: "2025-02-11"
+output: html_document
+---
+
+beige vs white DEGs within each cluster
+
+```{r params}
+module="adipogenesis"
+dataname = "beige_vs_white_downsample"
+library(here); i_am(file.path("analysis", paste0(dataname,".Rmd")))
+
+odir = here("output", module, dataname) 
+load_data = T #loading data 
+subset_data = F
+```
+
+```{r libs, warning=F, message=F, echo=F}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(Seurat)
+library(BPCells)
+library(ggrepel)
+library(clusterProfiler)
+library(enrichplot)
+```
+
+
+```{r themes}
+knitr::opts_chunk$set(dev=c("png","pdf"))
+pal = c("#1F78B4", 
+        #"#B2DF8A",
+        "#85C2EA","#B3B3B3", "#F18486",
+        #"#FDBF6F",
+        "#E31A1C")
+clusters = #ggsci::pal_simpsons()(13)[c(1:7,9:13)]
+  tvthemes::gravityFalls_pal()(13)
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
+#define new theme
+theme_hp = theme_classic(base_size=15) + 
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth=0.25),
+        strip.background = element_blank(), # remove boxes around facet labels
+        )
+#set for all ggplots
+theme_set(theme_hp)
+```
+
+## Read data
+
+```{r}
+if (subset_data){
+  sbs = readRDS(here(odir, "10%_complete_analysis.rds"))
+} else {
+  sbs = readRDS(here(odir, "complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+Idents(sbs) = "seurat_clusters"
+sbs
+all.genes = row.names(sbs)
+table(Idents(sbs))
+```
+
+```{r}
+DimPlot(sbs, cols= clusters, shuffle=T)
+```
+
+## White vs beige per cluster
+
+```{r}
+tcomp = read.delim(here(odir, "cluster_composition_condition_time.tsv")) 
+time_per_cluster = group_by(tcomp, seurat_clusters, time) %>% summarise(n_cells = sum(n_cells)) %>% 
+  slice_max(n=1, order_by = n_cells) %>% select(seurat_clusters, time)
+time_per_cluster
+```
+
+
+```{r}
+clusters_to_plot = filter(time_per_cluster, time != "day0") %>% pull(seurat_clusters)
+
+de_per_cluster = list()
+for (cluster in clusters_to_plot){
+  clu_ob = subset(sbs,  idents = cluster)
+  clu_wvb = FindMarkers(clu_ob, group.by="condition", ident.1 = "beige", ident.2 = "white")
+  clu_wvb = mutate(clu_wvb, sig=if_else(p_val_adj < 0.01 & abs(avg_log2FC) > 0.25 & 
+                                          (pct.1 + pct.2) > 0.2, "sig","not_sig"),
+                   condition = if_else(avg_log2FC > 0, "beige", "white"),
+         sig_cond = if_else(sig == "not_sig", "not_sig",
+                            if_else(avg_log2FC > 0, "beige", "white")
+                            ),
+         gene_name = row.names(clu_wvb),
+         time=time_per_cluster$time[time_per_cluster$seurat_clusters == cluster])
+  print(cluster)
+  print(table(clu_wvb$sig))
+  de_per_cluster[[paste0("b",cluster)]] = clu_wvb
+}
+```
+
+```{r}
+merged.table = bind_rows(de_per_cluster, .id="cluster") %>% 
+  #recorrect pvalues for multiple tests (one test per cluster, * number of genes in annotation)
+  mutate(adj_adj = p.adjust(p_val, method="bonferroni", n=length(clusters_to_plot)*length(row.names(sbs)))) %>%
+  filter(adj_adj < 0.01 & sig == "sig") %>% arrange(p_val_adj)
+nrow(merged.table)
+head(merged.table)
+table(merged.table$sig_cond, merged.table$cluster)
+```
+
+```{r}
+nonmt = filter(merged.table, !grepl("MT-", gene_name))
+top_nonmt = group_by(nonmt, cluster) %>% arrange(avg_log2FC) 
+beige = filter(top_nonmt, avg_log2FC > 0) %>% slice_max(n=3, order_by = avg_log2FC)
+white = filter(top_nonmt, avg_log2FC < 0) %>% slice_min( n=3, order_by = avg_log2FC)
+top_total = union(beige, white) # removes duplicates
+head(top_total)
+```
+
+```{r}
+#needed to sort gene names by cluster
+top_total = arrange(top_total, time, cluster, avg_log2FC)
+top_total$gene_name = factor(top_total$gene_name, levels=unique(top_total$gene_name))
+```
+
+
+```{r nomt_de_per_cluster}
+n = ggplot(top_total, aes(y=gene_name, colour=avg_log2FC, 
+                    x=cluster)) + 
+  geom_point(size=5) + 
+  scale_colour_gradient2(low="#1F78B4",mid="beige",high="#FF7F00")
+n +  facet_grid(~time, scales="free", space = "free_x")  
+n+ facet_wrap(~time, scales="free")
+```
+
+## Mt DE per cluster
+```{r}
+mt = filter(merged.table, grepl("MT-", gene_name))
+top_mt = group_by(mt, cluster) %>% arrange(avg_log2FC) 
+beige = filter(top_mt, avg_log2FC > 0) %>% slice_max(n=3, order_by = avg_log2FC)
+white = filter(top_mt, avg_log2FC < 0) %>% slice_min( n=3, order_by = avg_log2FC)
+top_total = dplyr::union(beige, white) # removes duplicates
+head(top_total)
+```
+
+```{r}
+#needed to sort gene names by cluster
+top_total = arrange(top_total, time, cluster, avg_log2FC)
+top_total$gene_name = factor(top_total$gene_name, levels=unique(top_total$gene_name))
+```
+
+
+```{r MT_de_per_cluster}
+m = ggplot(top_total, aes(y=gene_name, colour=avg_log2FC, 
+                    x=cluster)) + 
+  geom_point(size=5, ) + 
+  scale_colour_gradient2(low="#1F78B4",mid="beige",high="#FF7F00")
+m + facet_grid(~time, scales="free_x", space = "free_x")  
+m + facet_wrap(~time, scales="free_x") 
+```
+
+
+```{r}
+write.table(merged.table, here(odir, "per_cluster_white_vs_beige.tsv"), sep="\t", quote=F, row.names = F)
+```
+
+
+## Basic GO
+
+
+```{r}
+molsig <- clusterProfiler::read.gmt(here("data/gene_sets/msigdb.v2024.1.Hs.symbols.gmt"))
+head(molsig); nrow(molsig)
+
+prefixes = c("HALLMARK", "KEGG","REACTOME", "WP", "GOBP", "GOCC","GOMF")
+colnames(molsig) = c("term","gene")
+some.molsig = molsig[gsub("_.*","", molsig$term) %in% prefixes,]
+some.molsig$term = factor(some.molsig$term)
+table(gsub("_.*","", some.molsig$term))
+rm(molsig)
+```
+
+
+```{r go_bvw_inc_mt}
+go_clusters = compareCluster(gene_name~cluster+condition+time, data=merged.table,
+              fun="enricher", universe = all.genes,
+            TERM2GENE = some.molsig)
+head(go_clusters)
+```
+
+### Go term formatting
+
+Function to intelligently abbreviate GO terms and correct the capitalisation of initialisations based on the above lists.  To do: save these lists to file to make reproducible and concise.   
+
+```{r go_replace}
+phrases= read.delim(here("data/gene_sets/abbreviations.txt"))
+recap= read.delim(here("data/gene_sets/capitalisations.txt"))
+```
+
+```{r abrev_go}
+top2 = as_tibble(go_clusters) %>% filter(!grepl("^(KEGG|WP)", ID))   %>% slice_min(n=2, order_by = p.adjust, by = Cluster) %>% pull(ID)
+drama_shorten = function(ont) {
+  for (x in 1:nrow(phrases)){
+    ont = gsub( phrases$phrase[x],phrases$abbreviation[x], ont, ignore.case = T)
+  }
+  a = abbreviate(gsub("_"," ", gsub("^[[:alpha:]]*_","",tolower(ont))),minlength=41, dot=T, named = F)
+  a = stringr::str_to_sentence(a)
+  for (i in 1:nrow(recap))
+    a = gsub(sprintf("\\b%s\\b", recap$lowercase[i]),recap$capital[i],a, ignore.case = T)
+  return(a)
+}
+unique(drama_shorten(top2))
+unique(top2)
+```
+
+```{r go_bvw_cluster_w_mt}
+go_clusters = mutate(go_clusters, Description = drama_shorten(ID))
+dotplot(go_clusters, showCategory=2, x="cluster", includeAll=F)+ theme_hp + 
+  theme(axis.text.y=element_text(size=10))+ facet_grid(condition~time, scales="free", space = "free")
+```
+
+## Non-mt GO terms 
+```{r go_bvw_nonmt}
+head(nonmt)
+go_nonmt = compareCluster(gene_name~cluster+condition+time, data=nonmt,
+              fun="enricher", universe = all.genes,
+            TERM2GENE = some.molsig)
+go_nonmt = arrange(go_nonmt, p.adjust, pvalue) %>% filter(Count >=3)
+go_nonmt %>% group_by(cluster, condition) %>% slice(1:2) %>% head(n=30)
+```
+
+```{r go_bvw_cluster_nonmt}
+raw_go_terms = go_nonmt%>% arrange(p.adjust) %>% group_by(cluster, condition) %>% slice(1:2) %>% as.data.frame() %>% pull(ID)
+go_nonmt= mutate(go_nonmt, Description = drama_shorten(ID))
+dotplot(go_nonmt, showCategory=2, x="cluster", includeAll=F)+ 
+  theme(axis.text.y=element_text(size=10))+ facet_grid(~time, scales="free", space = "free") + theme_hp
+```
+
+
+```{r}
+write.table(as.data.frame(go_nonmt), here(odir, "per_cluster_white_vs_beige_ORA.tsv"), sep="\t", quote=F, row.names = F)
+```
+
+
+

@@ -1,0 +1,129 @@
+---
+title: "white_only_downsample_emont"
+author: "Sarah Hazell Pickering"
+date: "2025-09-30"
+output: html_document
+---
+
+
+```{r message=FALSE, warning=FALSE}
+library(Azimuth)
+library(SeuratData)
+library(Seurat)
+library(BPCells)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+```
+
+```{r}
+module="adipogenesis"
+qdataname = "white_only_downsample"
+library(here); i_am(file.path("analysis", paste0(qdataname,"_emont.Rmd")))
+indir = here("output", module,qdataname)
+odir = here(indir,"emont")
+if (!dir.exists(odir)){dir.create(odir, recursive = T)}
+
+subset_data =  F
+load_data = T #Load prebuilt Azimuth reference
+```
+
+```{r themes}
+pal = rev(c("#1F78B4", "#85C2EA","#B3B3B3"))
+clusters = tvthemes::gravityFalls_pal()(13)
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
+other = ggsci::pal_npg()(4)[c(1,3,4)]
+theme_set(theme_classic(base_size=15) + 
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth=0.25)))
+
+knitr::opts_chunk$set(dev=c('png','pdf'))
+```
+
+
+
+
+## Load Query Datasets
+
+```{r}
+if (subset_data){
+  qso = readRDS(here(indir, "10%_complete_analysis.rds"))
+  k.weight=5
+} else {
+  qso = readRDS(here(indir, "complete_analysis.rds"))
+  k.weight=50
+}
+qso
+```
+
+```{r}
+DimPlot(qso, group.by = "seurat_clusters", shuffle = T) + scale_colour_manual(values = clusters)
+DimPlot(qso, group.by = "time", shuffle = T) + scale_colour_manual(values = pal)
+```
+
+## Map clusters
+
+```{r}
+annot <- RunAzimuth(
+    query = qso,
+    reference = "adiposeref")
+```
+
+```{r}
+colnames(annot@meta.data)
+table(annot$predicted.celltype.l2)
+
+summary(annot$predicted.celltype.l2.score)
+```
+
+
+```{r umaps}
+DimPlot(annot, group.by = "predicted.celltype.l2", shuffle = T) + scale_colour_manual(values = other, name="Predicted cell type")
+FeaturePlot(annot,"predicted.celltype.l2.score") + scale_colour_gradientn(colours =  spectral, "Prediction confidence")
+```
+
+```{r filt_emont_cell_type}
+annot$filt.emont.celltype = "uncertain"
+annot$filt.emont.celltype[annot$predicted.celltype.l2.score > 0.75] =  
+  annot$predicted.celltype.l2[annot$predicted.celltype.l2.score > 0.75]
+
+DimPlot(annot, group.by = "filt.emont.celltype", shuffle = T) + scale_colour_manual(values = c("#00A087", "#E64B35","grey"))
+```
+
+
+```{r score_vln}
+VlnPlot(annot,"predicted.celltype.l2.score", group.by = "predicted.celltype.l2", pt.size = 0) + 
+  scale_fill_manual(values = other) +   labs(y="Prediction confidence", x= "Predicted cell type", title = element_blank())
+VlnPlot(annot,"predicted.celltype.l2.score", group.by="time", pt.size = 0)+ scale_fill_manual(values = pal) + 
+  labs(y="Prediction confidence", x= "Time", title = element_blank())
+
+VlnPlot(annot,"predicted.celltype.l2.score", split.by = "predicted.celltype.l2",group.by="time", pt.size = 0)+ 
+  scale_fill_manual(values = other, name="Predicted cell type") + labs(y="Prediction confidence", x= "Time", title = element_blank())
+```
+
+
+## Proportion plot
+```{r prop_plots}
+table(annot$time, annot$predicted.celltype.l2)
+prop = group_by(annot@meta.data, time, predicted.celltype.l2) %>% count(name = "Proportion")
+head(prop)
+ggplot(prop, aes(x=time,y=Proportion, fill=predicted.celltype.l2)) + geom_bar(stat='identity')+ 
+  scale_fill_manual(values = other, name="Predicted cell type") + labs(y="No cells")
+ggplot(prop, aes(x=time,y=Proportion, fill=predicted.celltype.l2)) + geom_bar(stat='identity',position = "fill")+ 
+  scale_fill_manual(values = other, name="Predicted cell type") +  scale_y_continuous(expand=expansion(mult=c(0,0.05))) + labs(x="Time")
+```
+
+
+
+```{r save}
+if (subset_data == FALSE){
+  saveRDS(annot, file = here(odir, "complete_analysis.annot.rds"))
+  sub = subset(annot, downsample=1000)
+  saveRDS(sub,here(odir,"10%_complete_analysis.annot.rds"))
+} else if (subset_data){ #if subset, don't save complete analysis
+  saveRDS(annot,here(odir, "10%_subset_analysis.annot.rds"))
+}
+```
+
+
+

@@ -1,0 +1,165 @@
+---
+title: "markers"
+author: "Sarah Hazell Pickering"
+date: "2025-10-01"
+output: html_document
+---
+
+```{r message=FALSE, warning=FALSE}
+library(Azimuth)
+library(SeuratData)
+library(Seurat)
+library(BPCells)
+library(tidyr)
+library(ggplot2)
+library(ggpubr)
+library(here); i_am(file.path("analysis", paste0("published_preadipocyte_markers.Rmd")))
+```
+
+## Load proegintors
+
+```{r}
+module="progenitors"
+dataname = "rpca"
+indir = here("output", module,dataname)
+odir = here(indir,"pub_marker_plots")
+if (!dir.exists(odir)){dir.create(odir, recursive = T)}
+
+subset_data =  F
+load_data = T #Load prebuilt Azimuth reference
+```
+
+```{r themes}
+pal = c("#1F78B4", "#85C2EA","#B3B3B3", "#F18486","#E31A1C")
+clusters = tvthemes::gravityFalls_pal()(13)
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
+prog_cols = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00","#AC8AD0")
+theme_hp = theme_classic(base_size=15) + 
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth=0.25),
+        strip.background = element_blank(), # remove boxes around facet labels
+        )
+#set for all ggplots
+theme_set(theme_hp)
+figpath = here(odir,"plots")
+if (!dir.exists(figpath)){dir.create(figpath, recursive = T)}
+knitr::opts_chunk$set(dev=c('png','pdf'), fig.path=figpath)
+```
+
+
+```{r}
+if (subset_data){
+  prog = readRDS(here(indir, "10%_complete_analysis.rds"))
+} else {
+  prog = readRDS(here(indir, "complete_analysis.rds"))
+}
+prog
+```
+
+
+
+## load white vs beige
+
+```{r}
+module="adipogenesis"
+dataname = "beige_vs_white_downsample"
+indir = here("output", module,dataname)
+```
+
+## Load Query Datasets
+
+```{r}
+if (subset_data){
+  wvb = readRDS(here(indir, "10%_complete_analysis.rds"))
+} else {
+  wvb = readRDS(here(indir, "complete_analysis.rds"))
+}
+wvb
+```
+
+Oguri et al. 
+SCa1 = ATXN1
+
+```{r}
+FeaturePlot(wvb,"CD81") + scale_colour_gradientn(colours =  spectral)
+FeaturePlot(prog,"CD81") + scale_colour_gradientn(colours =  spectral)
+FeaturePlot(prog,"CD81", reduction='initial.umap') + scale_colour_gradientn(colours =  spectral)
+```
+
+
+```{r}
+FeaturePlot(wvb,"ATXN1") + scale_colour_gradientn(colours =  spectral)
+FeaturePlot(prog,"ATXN1") + scale_colour_gradientn(colours =  spectral)
+FeaturePlot(prog,"ATXN1", reduction='initial.umap') + scale_colour_gradientn(colours =  spectral)
+```
+
+Suwandhi et al. 2021
+ASC-1=SLC7A10  white progenitor marker not expressed
+```{r}
+FeaturePlot(wvb,"SLC7A10") + scale_colour_gradientn(colours =  spectral)
+FeaturePlot(prog,"SLC7A10") + scale_colour_gradientn(colours =  spectral)
+FeaturePlot(prog,"SLC7A10", reduction='initial.umap') + scale_colour_gradientn(colours =  spectral)
+```
+
+
+Cells have lost expression of CD34
+```{r}
+FeaturePlot(wvb,"CD34") + scale_colour_gradientn(colours =  spectral)
+FeaturePlot(prog,"CD34") + scale_colour_gradientn(colours =  spectral)
+```
+
+Mouse progenitor marker Merrick etal. 
+```{r}
+FeaturePlot(wvb,"DPP4") + scale_colour_gradientn(colours =  spectral)
+FeaturePlot(prog,"DPP4") + scale_colour_gradientn(colours =  spectral)
+FeaturePlot(prog,"DPP4", reduction = 'initial.umap') + scale_colour_gradientn(colours =  spectral)
+```
+
+
+```{r}
+pub_markers = list("hMin"=c("CXCL8","IL11","IL1B","SF3A1"), #SF3=SF3A1? 
+                   "mMerrick"=c("ICAM1","DPP4","F3"), #CD142=F3
+                   "mWu2012"=c("TNFRSF9","TMEM26"),#TNFRSF9=CD137
+                   "hXue/hPalani"=c("ITGB1"), #CD29=ITGB1 
+                   "mOguri" = c("CD81","ATXN1"), #SCa1 = ATXN1
+                   "hGao/mAbe" = "CD36",
+                   "hRaajendrian" = "CD34",
+                   "hEsteve" = c("ALPL","NGFR"))#MSCA1/TNAP = ALPL, CD271 = NGFR
+
+pub_markers
+unlist(pub_markers)
+```
+
+
+
+```{r}
+FeaturePlot(prog,unlist(pub_markers), ncol = 3, ) & scale_colour_gradientn(colours =  spectral)
+VlnPlot(prog,unlist(pub_markers), stack=T, flip=T, fill.by = "ident", cols=prog_cols) 
+```
+
+```{r}
+theme_hp = theme_classic(base_size=8) + 
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth=0.25),
+        strip.background = element_blank(), # remove boxes around facet labels
+        )
+plot_list = list()
+for (marker in unlist(pub_markers)){
+   g = FeaturePlot(prog,marker, max.cutoff = 3) & scale_colour_gradientn(colours =  spectral) & theme_hp 
+   plot_list[[paste0(names(marker),marker)]] = g
+}
+g
+```
+
+
+```{r}
+p = ggarrange(plotlist=plot_list,
+          labels = names(unlist(pub_markers)),
+          ncol = 3, nrow=5, vjust=1, common.legend=T,
+          label.x=0.5) 
+
+p
+ggsave(plot = p[[1]], here(odir, "pub_marker_umaps1.png"), width = 20, height = 28, units="cm")
+ggsave(plot = p[[2]], here(odir, "pub_marker_umaps2.png"), width = 20, height = 28, units="cm")
+```
+

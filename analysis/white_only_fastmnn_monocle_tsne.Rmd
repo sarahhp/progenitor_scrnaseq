@@ -1,0 +1,179 @@
+---
+title: "white_only_fastmnn_monocle_tsne"
+author: "Sarah Hazell Pickering"
+date: "2024-09-19"
+output: html_document
+---
+
+```{r params}
+module="adipogenesis"
+method ="fastmnn"
+dataname = paste0("white_only_", method)
+
+library(here); i_am(file.path("analysis",paste0(dataname, "_monocle_tsne.Rmd")))
+odir = here("output", module, dataname) 
+indir = here("output", module, "white_only_integration_trial")
+load_data = T #loading data 
+subset_data = F
+
+if (!dir.exists(here(odir))){dir.create(here(odir), recursive = T)}
+```
+
+
+```{r libs, warning=F, message=F, echo=F}
+library(dplyr)
+library(ggplot2)
+library(Seurat)
+library(BPCells)
+library(monocle3)
+library(viridis)
+```
+
+```{r themes}
+pal = c("#B3B3B3","#85C2EA","#B2DF8A","#1F78B4")
+clusters = ggsci::pal_simpsons()(13)[c(1:7,9:13)]
+
+theme_hp = theme_classic(base_size=15) + 
+		  theme(axis.line = element_line(linewidth = 0.25),
+		        axis.ticks = element_line(linewidth=0.25),
+		        strip.background = element_blank(), # remove boxes around facet labels
+		        )
+theme_set(theme_hp)
+knitr::opts_chunk$set(dev=c('png','pdf'))
+```
+
+
+## Load Seurat object
+```{r load_seurat}
+if (subset_data){
+  sbs = readRDS(here(indir, "10%_complete_analysis.rds"))
+} else {
+  sbs = readRDS(here(indir,"complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+sbs
+variable.genes = VariableFeatures(sbs)
+```
+
+Set dataname to save a separate result for the pairedend velocity analysis
+```{r}
+red_name = paste("PCA", sep=".", toupper(method))
+# removing other integration objects to save space
+all_reds = names(sbs@reductions) 
+all_reds
+for (red in all_reds){
+  if (grepl("(pca|umap|tsne)\\.", red)){
+    if (gsub(".*\\.","", red) != method){
+      sbs[[red]] =NULL
+    }
+  }
+}
+names(sbs@reductions) 
+```
+
+```{r}
+sbs = JoinLayers(sbs)
+Idents(sbs) = "initial_clusters"
+sbs
+head(sbs@meta.data) 
+table(sbs$initial_clusters)
+
+#set default reductions
+sbs[["umap"]] = sbs[["umap.fastmnn"]]
+sbs[["tsne"]] = sbs[["tsne.fastmnn"]]
+sbs
+```
+
+```{r}
+DimPlot(sbs, reduction="tsne") + scale_colour_manual(values=clusters) + theme_hp
+```
+
+## Convert to monocle object
+```{r}
+cds = SeuratWrappers::as.cell_data_set(sbs)
+cds
+reducedDims(cds)[["tSNE"]] = reducedDims(cds)[["TSNE"]]
+```
+
+```{r}
+p = plot_cells(cds, show_trajectory_graph = F, cell_stroke=0.35, reduction_method = "tSNE", color_cells_by="initial_clusters", label_cell_groups = F) + 
+  scale_colour_manual(values=clusters)
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+Overwriting the UMAp slot with tSNE because there might be a bug
+```{r}
+reducedDims(cds)[["UMAP"]] = reducedDims(cds)[["tSNE"]]
+cds = cluster_cells(cds)
+p = plot_cells(cds, show_trajectory_graph = F, color_cells_by = "partition", label_groups_by_cluster = F, group_label_size = 5)
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+```{r}
+cds = learn_graph(cds, close_loop = T)
+p = plot_cells(cds, color_cells_by = "initial_clusters",
+           label_leaves=FALSE,
+           label_branch_points=FALSE, cell_stroke=0.35, label_cell_groups = F)+ 
+  scale_colour_manual(values=clusters)
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+
+## Order cells
+
+```{r}
+pick_root_node = function(cds,factor_name, start_bin){
+  cell_ids = which(colData(cds)[,factor_name]==start_bin)
+  closest_vertex <-  cds@principal_graph_aux[["UMAP"]]$pr_graph_cell_proj_closest_vertex
+  summary(closest_vertex)
+  closest_vertex <- as.matrix(closest_vertex[colnames(cds), ])
+  root_pr_nodes <- igraph::V(principal_graph(cds)[["UMAP"]])$name[as.numeric(names
+    (which.max(table(closest_vertex[cell_ids,]))))]
+return(root_pr_nodes)
+}
+pick_root_node(cds, "time","day0")
+pick_root_node(cds, "time","day1")
+pick_root_node(cds, "time","day3")
+```
+
+
+```{r day0_root}
+cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "time", "day0"))
+p = plot_cells(cds, color_cells_by = "pseudotime", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="red") + scale_colour_viridis()
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+
+```{r adipogenesis_cluster5_root}
+cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "initial_clusters", "5"))
+p = plot_cells(cds, color_cells_by = "pseudotime", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="red") + scale_colour_viridis()
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+```{r prolif_root}
+cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "initial_clusters", "8"))
+p = plot_cells(cds, color_cells_by = "pseudotime", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="red") + scale_colour_viridis()
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+## Save
+
+```{r}
+if (subset_data == FALSE){
+  saveRDS(cds, here(odir,"monocle_complete_analysis_tsne.rds"))
+  sub = subset(cds, downsample=1000)
+  saveRDS(sub, here(odir ,"10%_monocle_analysis_tsne.rds"))
+} else if (subset_data){ #if subset, don't save complete analysis
+  saveRDS(cds, file =here(odir,"1%_monocle_subset_analysis_tsne.rds") )
+}
+```
+

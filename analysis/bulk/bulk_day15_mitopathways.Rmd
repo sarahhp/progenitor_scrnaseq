@@ -1,0 +1,208 @@
+---
+title: "bulk_day15_mitopathways"
+author: "Sarah Hazell Pickering"
+date: "2024-09-16"
+output: html_document
+---
+
+```{r}
+library(here); i_am("analysis/bulk/bulk_day15_mitopathways.Rmd")
+knitr::opts_knit$set(dev=c("png","pdf"))
+odir = here("output/bulk")
+figdir = here(odir,"plots")
+if (!dir.exists(figdir)){dir.create(figdir, recursive = T)}
+```
+
+```{r message=FALSE, warning=FALSE, echo=TRUE}
+library(tidyr)
+library(dplyr)
+library(clusterProfiler)
+library(enrichplot)
+library(ggplot2)
+library(stringr)
+library(viridis)
+```
+
+
+```{r}
+mitop = read.delim(here("data/other_papers/Human.MitoCarta3.0.csv"), sep=",", stringsAsFactors = F, blank.lines.skip = T, nrows = 149)
+mitop = mitop[2:ncol(mitop)]
+colnames(mitop) = c("term","hierarchy","gene")
+mitop$gene = gsub(" ","", mitop$gene)
+head(mitop); tail(mitop)
+```
+
+```{r}
+milong = separate_rows(mitop, gene, sep=",")
+head(milong)
+table(table(milong$hierarchy))[1:20]
+length(unique(milong$term))
+```
+
+
+```{r}
+head(unique(milong$hierarchy))
+# only include terms that are not top-level in the heirarchy
+milong_simp = milong[str_count(milong$hierarchy,">") > 1,]
+milong_simp = milong_simp[ c("term","gene")]
+head(table(milong_simp$term))
+table(table(milong_simp$term))
+length(unique(milong_simp$term))
+```
+
+```{r}
+sig = read.delim(file="https://raw.githubusercontent.com/sarahhp/splicing_thermogenesis/main/03limma/any_and_all_donor_DGE.tsv")
+head(sig)
+nrow(sig)
+tail(sig)
+
+summary(sig$all.donors.adj.P.Val < 0.01)
+```
+
+```{r}
+make_gene_list = function(sig, donor){
+  gl = sig[,paste0("logFC.",donor)]
+  names(gl) = sig$gene_name
+  gl = gl[order(gl, decreasing = T)]
+  return (gl)
+}
+
+
+allgl = list()
+for (donor in c("s1","s2","s3","s4","s5","s6")){
+  print(donor)
+  gl = make_gene_list(sig, donor)
+  allgl[[donor]] = gl
+}
+str(allgl)
+```
+
+```{r}
+allea = compareCluster(allgl, fun=GSEA, TERM2GENE=milong_simp, pvalueCutoff=1, minGSSize=3, eps=1e-20)
+allea = arrange(allea, p.adjust)
+head(allea)
+summary(allea@compareClusterResult$p.adjust)
+nrow(allea)
+```
+
+```{r}
+write.table(as.data.frame(allea), here(odir, "mitopathways_GSEA.tsv"),
+            sep="\t", quote=F, row.names = F)
+```
+
+
+Alpha matters here for the includeAll plots
+
+## Alpha 0.01
+```{r}
+filt = filter(allea, p.adjust < 0.01) %>% arrange(p.adjust)
+```
+
+NES = Normalised enrichment score
+
+```{r}
+dotplot(filt, showCategory=5, includeAll=T)
+dotplot(filt, showCategory=5, includeAll=F)
+dotplot(filt, showCategory=3, includeAll=T, color="NES") + 
+  #scale_colour_gradientn(colours = c("beige", "#FF7F00")) 
+  scale_colour_distiller(palette="Oranges", direction=1) + theme_classic(base_size=15) + 
+  theme(axis.title.y=element_blank(),axis.text.y = element_text(size=12),
+        axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth=0.25)) + xlab("Subject")
+ggsave(here(figdir,"MitoPathways_GSEA_top3filt.pdf"))
+```
+
+## logFC heatmaps
+
+```{r}
+logfc = sig[,c(2,grep("logFC\\.s", colnames(sig)))]
+head(logfc)
+rownames(logfc) = logfc$gene_name
+logfc$gene_name = NULL
+#logfc =t(data.matrix(logfc) )
+logfc[1:6,1:6]
+```
+
+
+```{r}
+oxphos_subunits = milong[grep("C.* subunits", milong$hierarchy),]
+library(ComplexHeatmap)
+oxphos_subunits = oxphos_subunits[oxphos_subunits$gene %in% rownames(logfc),]#expr only
+head(oxphos_subunits)
+table(oxphos_subunits$term)
+
+oxphos_logfc = logfc[oxphos_subunits$gene,]
+oxphos_logfc
+```
+
+
+```{r}
+library(circlize)
+col_fun = colorRamp2(c(-2,0,2),c("#1F78B4","beige", "#FF7F00"))
+
+
+Heatmap(t(data.matrix(oxphos_logfc)), column_split = gsub(" subunits" ,"",oxphos_subunits$term), 
+        name="logfc", col=col_fun)
+```
+
+Differentially expressed only
+```{r}
+all.donor.sig = filter(sig, all.donors.adj.P.Val < 0.01) 
+oxphos_logfc = oxphos_logfc[rownames(oxphos_logfc) %in% all.donor.sig$gene_name,]
+nrow(oxphos_logfc)
+pdf(here(figdir, "OXPHOS_complexes_heatmap.pdf"), height=4)
+h= Heatmap(t(data.matrix(oxphos_logfc)), name="logfc",col=col_fun,
+        column_split = gsub(" subunits" ,"",oxphos_subunits$term[oxphos_subunits$gene %in% all.donor.sig$gene_name]),
+        column_names_gp = gpar(fontsize = 6)
+        )
+h 
+dev.off()
+h
+```
+
+## Non-canonical thermogensis logFC 
+FYI any duplicate genes between groups get a ".1" added to the end of the gene name in order not to have duplicate column names.  
+```{r}
+creatine_pathway = c("CKB","CKMT1B","CKMT2","GAMT","GATM","CKMT1A", "ALPL") #"CKM" not expr
+noncan = milong[grep("Fatty acid oxidation|Branched-chain.* metabolism|TCA cycle", milong$term),]
+table(noncan$term)
+noncan = noncan[noncan$gene %in% rownames(logfc),] # remove non expr
+table(noncan$term)
+creatine_pathway %in% rownames(logfc)
+```
+
+```{r}
+noncan_logfc = logfc[c(noncan$gene, creatine_pathway),]
+
+Heatmap(t(data.matrix(noncan_logfc)), name="logfc",col=col_fun,
+        column_split = gsub("chain","chain\n",c(noncan$term, rep("Creatine", length(creatine_pathway)))),
+        column_title_rot = 15, column_title_gp = gpar(fontsize = 10),)
+```
+
+```{r}
+noncan_logfc = noncan_logfc[gsub("\\.(1|2)","",rownames(noncan_logfc)) %in% all.donor.sig$gene_name,]
+nrow(noncan_logfc)
+noncan = noncan[noncan$gene %in% all.donor.sig$gene_name,]
+nrow(noncan)
+creatine_pathway = creatine_pathway[creatine_pathway %in% all.donor.sig$gene_name]
+length(creatine_pathway)
+
+noncan_labels = gsub("\\.(1|2)","",rownames(noncan_logfc)) 
+dups = noncan_labels[duplicated(noncan_labels)]
+noncan_labels[noncan_labels %in% dups] = paste0( "'",dups)
+
+pdf(here(figdir,"NonCanonicalTherm_heatmap.pdf"), height=4)
+h = Heatmap(t(data.matrix(noncan_logfc)), name="logfc", col=col_fun,
+        column_split =  gsub("chain","chain\n",c(noncan$term, rep("Creatine", length(creatine_pathway)))),
+        column_title_rot = 15, column_title_gp = gpar(fontsize = 12),
+        column_labels = noncan_labels,
+        column_names_gp = gpar(fontsize=6))
+h 
+dev.off()
+h
+
+```
+
+
+### Average expression plots?  
+average logFC across genes is a bit tricky, trends towards zero... but easier to show than two expression values.  Though really it makes sense to average fpkm then calculate logFC

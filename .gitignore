@@ -1,0 +1,16 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.Rapp.history
+.Rprofile
+.DS_Store
+data/cellranger/*
+data/scafe/count
+analysis/figure
+analysis/*png
+analysis/*html
+analysis/*_cache
+analysis/site_libs
+output/*.rds
+.snakemake

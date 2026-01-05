@@ -1,0 +1,156 @@
+---
+title: "progenitors_annotate_w_miranda"
+author: "Sarah Hazell Pickering"
+date: "2025-08-26"
+output: html_document
+---
+
+
+```{r message=FALSE, warning=FALSE}
+library(Azimuth)
+library(Seurat)
+library(BPCells)
+library(tidyr)
+library(ggplot2)
+library(here); i_am("analysis/progenitors/progenitors_annotate_w_miranda.Rmd")
+```
+
+```{r}
+subset_data =  F
+miranda_data = "/home/sarahhp/home/sc_rnaseq/other_data/miranda2025"
+refdata_name = "miranda2025.rds"
+module = "progenitors"
+qdataname = "initial"
+odir = here("output", module,qdataname)
+```
+
+## load reference dataset
+
+```{r}
+atissue = readRDS(here(miranda_data,"global_integrated_scp_bpcells.rds"))
+Idents(atissue) = "cell_type_level2"
+table(Idents(atissue))
+```
+
+
+```{r}
+progref = subset(atissue, idents=c("ASC","APC"))
+table(progref$cell_state,progref$cell_type_level2, useNA = "ifany")
+Idents(progref) = "cell_state"
+if (subset_data){
+  progref = subset(progref, downsample=1000)
+} 
+table(progref$cell_state, useNA = "ifany")
+rm(atissue)
+```
+
+```{r}
+progref
+# remove Emont cells with NA.  To do: substitute them 
+sig_mat = LayerData(progref, layer="counts")
+cells_with_nans <- apply(sig_mat, 2, function(x) any(is.nan(x)))
+progref = subset(progref, cells=colnames(progref)[!cells_with_nans])
+progref
+```
+
+
+```{r themes}
+pal = c( "#00AED1","#DA1819", "#434D51","#3AAD00","#691A93","#EBB400")
+clusters = ggsci::pal_simpsons()(13)[c(1:7,9:14)]
+  #tvthemes::gravityFalls_pal()(13)
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
+theme_set(theme_classic(base_size=15) + 
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth=0.25)))
+```
+
+## Create azimuth reference
+
+preprocessing
+```{r}
+refso = SCTransform(progref)
+refso = RunPCA(refso, verbose = F)
+refso <- FindNeighbors(refso, dims = 1:30, verbose = FALSE)
+refso = RunUMAP(refso, dims=1:20, return.model = T, verbose=F, n.neighbors = 20)
+```
+
+```{r}
+DimPlot(refso, group.by = "cell_state")  + scale_color_manual(values = clusters)
+```
+
+```{r}
+azdir = file.path(miranda_data, "azimuth_reference")
+if (!dir.exists(azdir)){dir.create(azdir, recursive = T)}
+
+refdata <- AzimuthReference(refso,
+    # Specify features to include as required
+    refDR="pca",
+    metadata = c("cell_state","donor_id")
+)
+```
+
+
+```{r}
+if (subset_data == F){
+  saveRDS(refdata, file.path(azdir, "ref.Rds"))
+  SaveAnnoyIndex(object = refdata[["refdr.annoy.neighbors"]], file = file.path(azdir, "idx.annoy"))
+} else if (subset_data){
+  azdir = file.path(azdir, "10%_subset")
+  if (!dir.exists(azdir)){dir.create(azdir, recursive = T)}
+  saveRDS(refdata, file.path(azdir, "ref.Rds"))
+  SaveAnnoyIndex(object = refdata[["refdr.annoy.neighbors"]], file = file.path(azdir, "idx.annoy"))
+}
+
+```
+
+
+```{r}
+DimPlot(refdata)  + scale_color_manual(values = clusters)
+DimPlot(refdata, group.by = "cell_state")  + scale_color_manual(values = clusters)
+```
+## Load Query Datasets
+
+```{r}
+if (subset_data){
+  qso = readRDS(here(odir, "10%_complete_analysis.rds"))
+} else {
+  qso = readRDS(here(odir, "complete_analysis.rds"))
+}
+qso
+```
+
+```{r}
+DimPlot(qso) + scale_colour_manual(values = clusters)
+```
+
+## Map clusters
+
+Not many anchors found for mapping :/ so we're adding a kweight limit to the Run Azimuth code aka. 
+trace("RunAzimuth.Seurat", where=asNamespace("Azimuth"), edit=T)
+adding kanchors=k.weight as a param to MappingScore on ln 107
+
+```{r}
+annot <- RunAzimuth(
+    query = qso,
+    reference = azdir, k.weight=45)
+```
+
+```{r}
+colnames(annot@meta.data)
+DimPlot(annot, group.by = "predicted.cell_state", shuffle = T)
+```
+```{r}
+DimPlot(annot, group.by = "predicted.cell_state.score", shuffle = T)
+```
+
+
+```{r save}
+if (subset_data == FALSE){
+  saveRDS(annot, file = here(odir, "complete_analysis.annot.rds"))
+  sub = subset(annot, downsample=1000)
+  saveRDS(sub,here(odir,"10%_complete_analysis.annot.rds"))
+} else if (subset_data){ #if subset, don't save complete analysis
+  saveRDS(annot,here(odir, "10%_subset_analysis.annot.rds"))
+}
+```
+

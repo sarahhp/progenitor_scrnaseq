@@ -1,0 +1,227 @@
+---
+title: "Cluster_composition_tests"
+author: "Sarah Hazell Pickering"
+date: "2025-02-03"
+output: html_document
+---
+
+- Step 1: Cluster composition plot
+    - save cluster counts and proportions by condition & time (no replicate information) "cluster_composition_condition_time.tsv"
+- Step 2: Test if the proportion of white and beige cells in each cluster is different; aka is it different from a 0.5 white/beige proportion.  To simplify this I'm only going to check cells from the majority time point for each cluster.
+    - save test result "cluster_composition_test.tsv"
+
+```{r params}
+module="adipogenesis"
+dataname = "beige_vs_white_downsample"
+library(here); i_am(file.path("analysis", paste0(dataname,".Rmd")))
+
+odir = here("output", module, dataname) 
+load_data = T #loading data 
+subset_data = F
+```
+
+```{r libs, warning=F, message=F, echo=F}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(Seurat)
+library(BPCells)
+library(patchwork)
+```
+
+
+```{r themes}
+pal = c("#1F78B4", 
+        #"#B2DF8A",
+        "#85C2EA","#B3B3B3", "#F18486",
+        #"#FDBF6F",
+        "#E31A1C")
+clusters = #ggsci::pal_simpsons()(13)[c(1:7,9:13)]
+  tvthemes::gravityFalls_pal()(13)
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
+
+#define new theme
+theme_hp = theme_classic(base_size=15) + 
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth=0.25),
+        strip.background = element_blank(), # remove boxes around facet labels
+        )
+#set for all ggplots
+theme_set(theme_hp)
+
+knitr::opts_chunk$set(dev=c("png","pdf"))
+```
+
+## Read data
+
+```{r}
+if (subset_data){
+  sbs = readRDS(here(odir, "10%_complete_analysis.rds"))
+} else {
+  sbs = readRDS(here(odir, "complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+Idents(sbs) = "seurat_clusters"
+Idents(sbs) = factor(Idents(sbs), levels=0:(length(unique(Idents(sbs))))-1)
+sbs
+table(Idents(sbs))
+```
+
+```{r cluster.umap}
+DimPlot(sbs, cols= clusters, label = T) + theme_hp
+```
+
+
+```{r condition.time.umap}
+DimPlot(sbs, group.by="cond.time",cols=pal, shuffle=T) + theme_hp
+```
+
+## Composition plots (per condition + time)
+(not per sample)
+```{r}
+tcomp = group_by(sbs@meta.data, cond.time,seurat_clusters, time, condition) %>% dplyr::count(name="n_cells")
+tcomp= tcomp[order(tcomp$n_cells, decreasing = T),]
+#calculate proportions directly, then plot percentage just for the three cyc;ling cells
+tcomp= group_by(tcomp, cond.time) %>% mutate(cells_per_sample = n_cells/sum(n_cells))
+tcomp= group_by(tcomp, seurat_clusters) %>% mutate(prop.cells_per_cluster = n_cells/sum(n_cells), n.cells_per_cluster = sum(n_cells))
+head(tcomp)
+str(tcomp)
+```
+
+
+```{r condition.time_composition.all}
+ggplot(tcomp, aes(x=seurat_clusters, fill=cond.time, y=prop.cells_per_cluster)) + 
+  geom_bar(position="dodge", stat='identity') + 
+  scale_fill_manual(values=pal) + facet_grid(~time, scales="free_x") +
+  geom_hline(yintercept = 0.5, linetype="dashed", linewidth=0.25) +
+  scale_y_continuous(expand=c(0,0))
+
+ggplot(tcomp, aes(x=seurat_clusters, fill=cond.time, y=n_cells)) + 
+  geom_bar(position="dodge", stat='identity') + 
+  scale_fill_manual(values=pal) + facet_grid(~time, scales="free_x")+
+  scale_y_continuous(expand=c(0,0))
+```
+
+```{r}
+write.table(tcomp, here(odir, "cluster_composition_condition_time.tsv"),
+            sep="\t", quote = F, row.names = F)
+```
+
+
+## Best matches
+For plotting and testing we want to focus of the main timepoint for each cluster; this selects the majority timepoint per cluster and then subsets our frequency table.  
+```{r}
+time_per_cluster = group_by(tcomp, seurat_clusters, time) %>% summarise(n_cells = sum(n_cells)) %>% 
+  slice_max(n=1, order_by = n_cells) %>% select(seurat_clusters, time)
+time_per_cluster
+
+bestmatches = merge(tcomp, time_per_cluster, by=c("seurat_clusters","time"), all=F)
+bestmatches$condition = gsub("\\..*","",bestmatches$cond.time)
+bestmatches
+```
+
+
+```{r condition.time_composition.best}
+ggplot(bestmatches, aes(x=seurat_clusters, fill=cond.time, y=prop.cells_per_cluster)) + 
+  geom_bar(position="dodge", stat='identity') + 
+  scale_fill_manual(values=pal) + facet_wrap(~time, scales="free_x") +
+  geom_hline(yintercept = 0.5, linetype="dashed", linewidth=0.25)+ facet_grid(~time, scales="free_x")+
+  scale_y_continuous(expand=c(0,0))
+
+ggplot(bestmatches, aes(x=seurat_clusters, fill=cond.time, y=n_cells)) + 
+  geom_bar(position="dodge", stat='identity') + 
+  scale_fill_manual(values=pal) + facet_wrap(~time, scales="free_x")+ facet_grid(~time, scales="free_x")+
+  scale_y_continuous(expand=c(0,0.05))
+```
+
+^ the proportions plotted above also include cells from a different time point that get included in the count.  E.g. cluster 2 here has some day1 cells in it which is why day3 white and beige don't add up to 100%.  So to be totally covering our bases we should include them in the proportion test - then we have to do individual tests to figure out where the change is coming from.  
+
+
+## White vs beige proportion test
+Test if the proportion of white and beige cells in each cluster is different; aka is it different from a 0.5 white/beige proportion.  To simplify this I'm only going to check cells from the majority time point for each cluster.
+
+```{r}
+clusters_to_test = filter(bestmatches, condition == "beige") %>% pull(seurat_clusters) 
+clusters_to_test
+
+wvb_df = filter(bestmatches, seurat_clusters %in% clusters_to_test) %>% 
+  pivot_wider(names_from=condition, values_from = n_cells, id_cols = seurat_clusters) %>% 
+  as.data.frame()
+rownames(wvb_df) = paste0("b",wvb_df$seurat_clusters)
+wvb = data.matrix(wvb_df)
+wvb = wvb[,2:3]
+wvb
+
+## quick test are any different than 50%?
+prop.test(wvb) #Yes some are different
+```
+
+
+```{r}
+clu_tests  = list()
+tests = data.frame(cluster = paste0("b",clusters_to_test), prop = wvb[,"beige"]/(wvb[,"white"]+wvb[,"beige"]),p.value=NA, conf.int.1=NA, conf.int.2=NA)
+
+for (clu in tests$cluster){
+  res = prop.test(matrix(wvb[clu,], ncol = 2), conf.level=0.99)
+  clu_tests[[clu]] = res
+  tests[tests$cluster == clu,]$p.value = res$p.value
+  tests[tests$cluster == clu,]$conf.int.1 = res$conf.int[[1]]
+  tests[tests$cluster == clu,]$conf.int.2 = res$conf.int[[2]]
+}
+clu_tests[[1]]$p.value
+clu_tests[[1]]
+tests$p.adjust = p.adjust(tests$p.value, method="fdr")
+tests
+```
+The most significant differences are for cluster b1 and cluster b6, but only cluster b6 has a p-value robust to adjustment.  
+
+## Plot X-squared CIs 
+
+```{r}
+to_plot = dplyr::rename(tests, prop_beige=prop, conf.int.1_beige=conf.int.1, conf.int.2_beige=conf.int.2)
+to_plot$prop_white = 1-to_plot$prop_beige
+to_plot$conf.int.1_white = to_plot$conf.int.1_beige + (to_plot$prop_white - to_plot$prop_beige)
+to_plot$conf.int.2_white = to_plot$conf.int.2_beige + (to_plot$prop_white - to_plot$prop_beige)
+to_plot = pivot_longer(to_plot, matches("white|beige"), 
+                       names_to = c(".value","condition"),
+                       names_pattern = "(.*)_(.*)",
+                     )
+bestmatches$cluster = paste0("b",bestmatches$seurat_clusters)
+to_plot = merge(to_plot, bestmatches, by=c("cluster","condition"))
+```
+
+
+```{r wvb_proportion_test}
+ggplot(to_plot, aes(y=cluster, fill=cond.time, x=prop)) + 
+  geom_bar(stat='identity')     + 
+  geom_errorbar(data=filter(to_plot, condition =="beige"), aes(xmin=conf.int.1, xmax=conf.int.2), 
+                 width=0.7, linewidth=0.5, colour="white") +
+  geom_vline(xintercept = 0.5, linetype="dashed",linewidth=0.25) +
+  scale_fill_manual(values=pal[c(1,2,4,5)]) + facet_grid(time~., scales="free_y") +
+  scale_x_continuous(expand=c(0,0))
+```
+
+
+## Column version
+
+```{r wvb_proportion_test_columns}
+ggplot(to_plot, aes(x=cluster, fill=cond.time, y=prop))  +
+  geom_hline(yintercept = 0.5, linewidth=0.4, colour="grey55") + 
+  geom_bar(position="dodge", stat='identity') + 
+  geom_errorbar( aes(ymin=conf.int.1, ymax=conf.int.2), 
+                 position=position_dodge(0.9), width=0.4, linewidth=0.3) +
+  scale_fill_manual(values=pal[c(1,2,4,5)]) + facet_wrap(~time, scales="free_x")  +
+  scale_y_continuous(expand=c(0,0))
+```
+
+
+
+```{r}
+write.table(tests, here(odir, "cluster_composition_test.tsv"),
+            sep="\t", quote=F, row.names=F)
+```
+
+
+
+
+

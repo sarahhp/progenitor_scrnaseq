@@ -1,0 +1,75 @@
+---
+title: "Azimuth_emont_annotatio"
+author: "Sarah Hazell Pickering"
+date: "2024-08-14"
+output: html_document
+---
+
+```{r params}
+module="progenitors"
+dataname = "rpca"
+library(here);i_am(file.path("analysis",paste(module,sep="_",dataname, "azimuth_emont_annotation.Rmd")))
+odir = here("output", module, dataname) 
+
+load_data = T #Loading initial seurat analysis
+subset_data =  F
+
+if (!dir.exists(odir)){dir.create(odir, recursive = T)}
+```
+
+
+```{r libs, warning=F, message=F, echo=T}
+library(biomaRt)
+library(dplyr)
+library(ggplot2)
+library(ggsci)
+
+library(Seurat)
+library(BPCells)
+library(Azimuth)
+
+ pal = c("#DA1819", "#00AED1", "#434D51","#EBB400","#691A93","#3AAD00")
+clusters = ggsci::pal_simpsons()(13)[c(1:7,9:13)]
+spectral =  rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
+```
+
+
+```{r}
+if (subset_data){
+  filt = readRDS(here(odir, "10%_complete_analysis.rds"))
+} else{
+  filt = readRDS(here(odir, "complete_analysis.rds"))
+}
+filt
+```
+
+
+```{r}
+annot = RunAzimuth(query=filt, reference ="adiposeref")
+annot
+```
+
+
+```{r}
+DimPlot(annot, reduction = "umap", group.by = "predicted.celltype.l2")
+FeaturePlot(annot, reduction = "umap",  "predicted.celltype.l2.score")
+FeaturePlot(annot, reduction = "umap",  "mapping.score")
+```
+
+```{r}
+VlnPlot(annot, group.by = "predicted.celltype.l2", features = "mapping.score")
+VlnPlot(annot, group.by = "predicted.celltype.l2", features = "predicted.celltype.l2.score")
+```
+
+
+### save the annotation
+```{r}
+summary(colnames(filt)== colnames(annot))
+filt$emont_celltype = annot$predicted.celltype.l2
+filt$emont_celltype.score = annot$predicted.celltype.l2.score
+```
+
+
+```{r}
+saveRDS(filt, file = here(odir, "annotated_analysis.rds"))
+```

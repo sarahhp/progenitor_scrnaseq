@@ -1,0 +1,186 @@
+---
+title: "progenitor_rpca_comopsition_test"
+author: "Sarah Hazell Pickering"
+date: "2025-02-05"
+output: html_document
+---
+
+
+```{r}
+module="progenitors"
+dataname = "rpca"
+library(here);i_am(file.path("analysis",paste(module,sep="_",dataname, "composition_test.Rmd")))
+
+odir = here("output", module, dataname) 
+
+load_data = T #Loading initial seurat analysis
+subset_data =  F
+```
+
+
+
+```{r libs}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggsci)
+library(ggbeeswarm)
+
+library(Seurat)
+library(BPCells)
+```
+
+
+```{r themes}
+pal = c("#DA1819", "#00AED1", "#434D51","#EBB400","#691A93","#3AAD00")
+clusters =  c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00","#AC8AD0")
+spectral =  rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
+theme_hp = theme_classic(base_size=15) + 
+		  theme(axis.line = element_line(linewidth = 0.25),
+		        axis.ticks = element_line(linewidth=0.25),
+		        strip.background = element_blank(), # remove boxes around facet labels
+		        ) 
+		#set for all ggplots
+theme_set(theme_hp)
+```
+
+```{r}
+clcomp = read.delim(here(odir, "cluster_composition.txt"), colClasses = list(seurat_clusters="factor"))
+clcomp = group_by(clcomp,seurat_clusters) %>% mutate( sd_cells_per_donor=sd(cells_per_donor))
+head(clcomp)
+```
+
+
+```{r prop_plot, dev = c('png','pdf')}
+ggplot(clcomp, aes(x=donor_id, y=cells_per_donor, fill=seurat_clusters)) +
+  geom_bar(stat="identity") +
+  scale_fill_manual(values=clusters)  + coord_cartesian(expand=F)
+
+ggplot(filter(clcomp,seurat_clusters %in% 0:3), aes(x=donor_id, y=cells_per_donor, fill=seurat_clusters)) +
+  geom_bar(stat="identity", position = "fill") +
+  scale_fill_manual(values=clusters) + coord_cartesian(expand=F)
+```
+
+```{r boxplot, dev = c('png','pdf')}
+ggplot(clcomp, aes(x=seurat_clusters, colour=seurat_clusters, y=cells_per_donor)) + 
+  geom_boxplot() + geom_beeswarm(cex=2) + 
+  scale_colour_manual(values=clusters) 
+ggplot(clcomp, aes(x=seurat_clusters,  y=cells_per_donor, )) + 
+  geom_boxplot(outlier.shape = NA, fill='lightgrey') +  geom_beeswarm(aes(colour=donor_id), size=2, cex=2)+
+  scale_colour_manual(values=pal) 
+```
+
+
+```{r sd_plot, dev = c('png','pdf')}
+ggplot(clcomp, aes(x=seurat_clusters, y=sd_cells_per_donor, fill=seurat_clusters)) + 
+  geom_bar(stat="summary", fun="mean") +  coord_cartesian(expand=F) +
+  scale_fill_manual(values=clusters) 
+```
+
+```{r composition_cols, dev = c("png",'pdf')}
+ggplot(clcomp, aes(x=seurat_clusters, fill=donor_id, y=cells_per_donor)) + 
+  geom_bar(position="dodge", stat='identity') +  scale_fill_manual(values=pal)  + coord_cartesian(expand=F)
+```
+
+
+
+## Proportion test
+ the null tested is that the proportions in each group are the same. 
+With such a large n, even clusters 5 and 6 that have a really similar proportion of cells come out as significant.  e.g. standard deviation is < 1%
+
+```{r}
+donor_counts = group_by(clcomp, donor_id) %>% summarise(total=sum(n_cells))
+donor_counts
+```
+
+
+```{r}
+clu_tests = list()
+for (clu in 0:(length(levels(clcomp$seurat_clusters))-1)){
+  clu_counts = filter(clcomp, seurat_clusters == clu) %>% pull(n_cells)
+  res = prop.test(clu_counts, donor_counts$total)
+  clu_tests[[paste0("p",clu)]] = res
+}
+clu_tests
+
+```
+
+
+## Pairwise prop test
+because all the individual comparsions are not necessarily significant
+Now we've got to apply p-value adjustment.  
+```{r}
+subject_pairs = list(1:2,c(1,3),c(1,4),c(1,5),c(1,6),
+                     2:3, c(2,4),c(2,5),c(2,6),
+                     3:4,c(3,5),c(3,6),
+                     4:5, c(4,6), 5:6)
+subject_pairs = sapply(subject_pairs, function(pair) {
+  paste0("S", pair[1], ".v.S", pair[2])})
+
+clu_tests = data.frame(seurat_clusters =rep(levels(clcomp$seurat_clusters), each=15), 
+                       pvalue=NA, 
+                       conf.int.1 = NA,
+                       conf.int.2 = NA,
+                       subject_pairs=subject_pairs           )
+head(clu_tests)
+```
+
+
+```{r}
+pairwise.prop.test = function(names, counts, totals, name_col="donor_id"){
+  #counts table with name_col usually donor id and n_cells for the cluster in question
+  #names is a vector e.g. c("S1","S2")
+  
+  counts_filt = rename(counts, subject = all_of(name_col)) %>%filter( subject%in% names) %>% pull(n_cells)
+  totals_filt = rename(totals, subject = all_of(name_col)) %>% filter(subject %in% names) %>% pull(total)
+  res = prop.test(counts_filt, totals_filt, conf.level = 0.99)
+  return(res)
+}
+pairwise.prop.test(c("S1","S2"), filter(clcomp, seurat_clusters == clu), donor_counts)
+```
+
+
+```{r}
+for (clu in 0:(length(levels(clcomp$seurat_clusters))-1)){
+  clu_counts = filter(clcomp, seurat_clusters == clu)
+  pairs = c()
+  for (pair in subject_pairs){
+    subjects = stringr::str_split_1(pair[1], pattern=".v.")
+    res = pairwise.prop.test(subjects, clu_counts, donor_counts)
+    clu_tests$pvalue[clu_tests$seurat_clusters == clu &
+                     clu_tests$subject_pairs == pair] =  res$p.value
+    clu_tests$conf.int.1[clu_tests$seurat_clusters == clu &
+                     clu_tests$subject_pairs == pair] =  res$conf.int[[1]]
+    clu_tests$conf.int.2[clu_tests$seurat_clusters == clu &
+                     clu_tests$subject_pairs == pair] =  res$conf.int[[2]]
+  }
+}
+clu_tests = mutate(clu_tests, p.adjust=p.adjust(pvalue, method="fdr"))
+head(clu_tests)
+```
+
+```{r}
+adjp_mat = pivot_wider(clu_tests, id_cols=subject_pairs, names_from=seurat_clusters, values_from = p.adjust, names_prefix = "p", values_fn = function(x){round(x,4)})
+adjp_mat
+
+group_by(clu_tests,subject_pairs) %>% summarise(round(mean(p.adjust), 4))
+group_by(clu_tests,seurat_clusters) %>% summarise(round(mean(p.adjust), 4))
+```
+
+```{r}
+write.table(adjp_mat, here(odir, "pairwise_donor_composition_test.tsv"),
+            sep="\t", quote=F, row.names = F)
+```
+
+
+```{r}
+head(clu_tests)
+to_plot = clu_tests %>% separate_longer_delim(subject_pairs, delim = ".v.") 
+nrow(to_plot)
+
+merge(clcomp, clu_tests, by="seurat_clusters")
+ggplot(clu_tests, aes(x=seurat_clusters, y=))
+```
+
+
+

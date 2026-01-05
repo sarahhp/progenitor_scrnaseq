@@ -1,0 +1,256 @@
+---
+title: "DGE_between_donors_beige"
+author: "Sarah Hazell Pickering"
+date: "2025-07-01"
+output: html_document
+---
+
+Preprocessing as in: https://github.com/sarahhp/splicing_thermogenesis/blob/main/R/01_six_donor_DGE_limma.Rmd
+
+```{r}
+library(here); i_am("analysis/bulk_day15_mitopathways.Rmd")
+knitr::opts_knit$set(dev=c("png","pdf"))
+odir = here("output/bulk")
+```
+
+```{r message=FALSE, warning=FALSE, echo=TRUE}
+library(tidyr)
+library(readr)
+library(dplyr)
+library(edgeR)
+library(limma)
+library(RUVSeq)
+library(clusterProfiler)
+library(enrichplot)
+library(ggplot2)
+library(stringr)
+library(viridis)
+```
+
+
+```{r themes}
+theme_set(theme_classic(base_size=15) + 
+  theme(axis.title.y=element_blank(),axis.text.y = element_text(size=12),
+        axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth=0.25)))
+bvw= c("#FF7F00","#1F78B4")
+pal = c( "#00AED1","#DA1819", "#434D51","#3AAD00","#691A93","#EBB400")
+```
+
+
+```{r}
+#load preproceesed object called filt
+load(url("https://github.com/sarahhp/splicing_thermogenesis/raw/refs/heads/main/03limma/DGElist_ob_limma_filt.RData"))
+```
+
+```{r}
+filt$samples$name
+filt$counts [filt$genes$Geneid == "ENSG00000109424",]
+```
+
+
+### voom normlisation
+
+```{r}
+norm = voom(filt, plot=T)
+```
+
+## Limma
+
+```{r}
+head(norm$design)
+#set some factor levels
+norm$targets$group = paste(norm$targets$condition, norm$targets$donor, sep=".") #explicit
+#simplify names for intercepting
+norm$targets$group = gsub("subject","s", norm$targets$group)
+norm$targets$group = factor(gsub("eige|hite","", norm$targets$group))
+norm$targets$group
+table(norm$targets$group)
+design = model.matrix(~0 + group, data=norm$targets)
+colnames(design) = c(levels(norm$targets$group))
+head(design)
+```
+
+```{r}
+explicit_fit = lmFit(norm, design=design)
+# Explicitly writing out contrasts
+explong = makeContrasts(# s1 vs eacg
+                        s1 = b.s1 - (b.s2 + b.s3 + b.s4 + b.s5 + b.s6)/5 ,
+                        s2 = b.s2 - (b.s1 + b.s3 + b.s4 + b.s5 + b.s6)/5 ,
+                        s3 = b.s3 - (b.s1 + b.s2 + b.s4 + b.s5 + b.s6)/5 ,
+                        s4 = b.s4 - (b.s1 + b.s2 + b.s3 + b.s5 + b.s6)/5 ,
+                        s5 = b.s5 - (b.s1 + b.s2 + b.s3 + b.s4 + b.s6)/5 ,
+                        s6 = b.s6 - (b.s1 + b.s2 + b.s3 + b.s4 + b.s5)/5 ,
+                         levels = design)
+next_fit = contrasts.fit(explicit_fit, explong)
+#Becomes a weighted contrast table
+next_fit$contrasts
+efit = eBayes(next_fit, robust=T)
+results= decideTests(efit, method="separate", adjust.method = "BH", p.value = 0.01)
+summary(results)
+```
+
+
+### Subject tables
+
+```{r}
+coefs = colnames(efit$contrasts)
+subjecttabs = list()
+
+base_matrix = matrix(NA, dimnames = list(efit$genes$gene_name,coefs), 
+                                     nrow = nrow(efit$genes), ncol=length(coefs))
+subjectlists = list(adj.p.val = base_matrix, logFC = base_matrix,  
+                  genes= efit$genes )
+for ( co in coefs){
+  onesubject = topTable(efit, number = Inf, adjust.method = "BH", 
+                    coef = co)
+  subjecttabs[[co]] = onesubject
+  subjectlists$adj.p.val[,co] = onesubject$adj.P.Val[order(onesubject$Geneid)]
+  subjectlists$logFC[,co] = onesubject$logFC[order(onesubject$Geneid)]
+}
+summary(subjecttabs)
+```
+
+```{r}
+ann_cols = c("Geneid", "gene_name", "description")
+alltab = efit$genes[,!colnames(efit$genes) %in%c("ensembl_gene_id_version", "ID","Length")]
+for (d in coefs){
+  formatted = subjecttabs[[d]]
+  formatted = formatted[,c(ann_cols,"logFC","P.Value","adj.P.Val","AveExpr")]
+  alltab = merge(alltab, formatted, by=ann_cols,
+                 suffixes = c("",paste(".", d, sep="")))
+  alltab = alltab[!duplicated(alltab$gene_name),] #remove duplicates because they tend to propogate on merges
+}
+head(alltab); nrow(alltab)
+# add .s1v2 to the first occurence
+alltab = dplyr::rename(alltab, P.Value.s1 = "P.Value", adj.P.Val.s1 = "adj.P.Val", AveExpr.s1 = "AveExpr", logFC.s1= logFC) 
+summary(rowSums(alltab[,grep("adj.P.Val\\.s", colnames(alltab))] < 0.05) == 6)
+```
+
+```{r}
+filter(alltab, gene_name %in% c("UCP1","CIDEA","LPL","CITED1","ALPL"))
+```
+
+```{r}
+write.table(alltab, here(odir, "beige_DGE_between_subjects.tsv"),
+            sep="\t", quote=F, row.names = F)
+```
+
+
+## GO setup
+```{r}
+go <- clusterProfiler::read.gmt("/projects/imb-pkbphil/sp/annotations/molsigdb/msigdb.v2024.1.Hs.symbols.gmt")
+molsig = go[gsub("_.*","", go$term) %in% c("GOCC","GOBP","GOMF","KEGG","HALLMARK","WP","REACTOME"),]
+
+head(molsig); nrow(molsig)
+molsig$term = factor(molsig$term)
+table(gsub("_.*","", molsig$term))
+```
+
+
+```{r go_replace}
+phrases= read.delim(here("data/gene_sets/abbreviations.txt"))
+recap= read.delim(here("data/gene_sets/capitalisations.txt"))
+```
+
+
+Function to intelligently abbreviate GO terms and correct the capitalisation of initialisations based on the above lists.  To do: save these lists to file to make reproducible and concise.   
+
+```{r abrev_go}
+drama_shorten = function(ont) {
+  for (x in 1:nrow(phrases)){
+    ont = gsub( phrases$phrase[x],phrases$abbreviation[x], ont, ignore.case = T)
+  }
+  print(ont)
+  a = abbreviate(gsub("_"," ", gsub("^[[:alpha:]]*_","",tolower(ont))),minlength=41, dot=T, named = F)
+  a = stringr::str_to_sentence(a)
+  for (i in 1:nrow(recap))
+    a = gsub(sprintf("\\b%s\\b", recap$lowercase[i]),recap$capital[i],a, ignore.case = T)
+  return(a)
+}
+```
+
+
+```{r}
+make_gene_vector = function(sig, donor, direction="up"){
+  sig = sig[sig[,paste0("adj.P.Val.",donor)] < 0.05,]
+  if (direction == "up"){
+    gv = sig$gene_name[sig[,paste0("logFC.",donor)] > 0 ]
+  } else if (direction == "down"){
+    gv = sig$gene_name[sig[,paste0("logFC.",donor)] < 0 ]
+  }else {print("Error: direction option should be either \"up\" or \"down\"")}
+  return (gv)
+}
+
+allgv = list()
+up=c()
+down=c()
+for (donor in c(coefs)){
+  print(donor)
+  up = make_gene_vector(alltab, donor, direction="up")
+  #down = make_gene_vector(alltab, donor, direction="down")
+  if (length(up) > 0 ){
+    allgv[[paste0(donor, ".up")]] = up
+  }
+  if (length(down) >0){
+    allgv[[paste0(donor, ".down")]] = down
+  }
+}
+str(allgv)
+```
+
+## Run GO
+
+```{r}
+allgo = compareCluster(allgv, fun=enricher, TERM2GENE=molsig, minGSSize=3, universe = alltab$gene_name)
+allgo = arrange(allgo, p.adjust, Count)
+head(allgo)
+summary(allgo@compareClusterResult$p.adjust)
+nrow(allgo)
+```
+
+
+```{r}
+filt = filter(allgo, p.adjust < 0.01)  %>% 
+  mutate(direction= gsub(".*\\.","", Cluster), subject= gsub("\\..*","", Cluster))
+```
+
+## GO  plot
+
+```{r go, dev=c("png","pdf")}
+dotplot(filt, showCategory=2, includeAll=T)+ theme(axis.text.x = element_text(angle=30,hjust=1) ) 
+
+dotplot(filt, showCategory=3, includeAll=F) + theme(axis.text.x = element_text(angle=30,hjust=1) )
+```
+
+```{r}
+top2 = filter(as_tibble(filt), direction =="up") %>% 
+  slice_min(tibble(p.adjust,plyr::desc(Count)), n=2, by=Cluster)
+top2[,c(1:2,4:11)]
+top2$ID = factor(top2$ID, levels=unique(top2$ID))
+```
+
+
+```{r}
+ggplot(top2,aes(x=subject, y=ID, color=subject, size=-log10(p.adjust))) + geom_point() +
+  scale_color_manual(values = pal) + scale_y_discrete(labels=function (ID) drama_shorten(ID)) 
+```
+
+```{r dev=c("png","pdf")}
+include_all_plot = filter(as_tibble(filt), Description %in% top2$Description & p.adjust < 0.01 & direction == "up") 
+include_all_plot$ID = factor(include_all_plot$ID, levels=unique(top2$ID))
+
+ggplot(include_all_plot,aes(x=subject, y=ID, color=subject, size=-log10(p.adjust))) + geom_point() +
+  scale_color_manual(values = pal) + xlab("Subject") + 
+  scale_y_discrete(labels= function(ID) drama_shorten(ID) )
+
+```
+
+
+
+```{r}
+write.table(as.data.frame(allgo), here(odir, "beige_DGE_between_subjects_GO.tsv"),
+            sep="\t", quote=F, row.names = F)
+```
+
+

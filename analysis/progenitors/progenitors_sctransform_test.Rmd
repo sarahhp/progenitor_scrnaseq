@@ -1,0 +1,91 @@
+---
+title: "progenitors_sctranform_test"
+author: "Sarah Hazell Pickering"
+date: "2024-08-08"
+output: workflowr::wflow_html
+editor_options:
+  chunk_output_type: console
+---
+
+```{r params}
+module="progenitors"
+dataname = "sctransform_test"
+library(here); i_am(file.path("analysis",paste(module,sep="_",
+                                               paste0(dataname, ".Rmd"))))
+indir = here("output", module, "initial")
+odir = here("output", module, dataname) 
+
+load_data = T #Loading initial seurat analysis
+subset_data = F 
+
+if (!dir.exists(odir)){dir.create(odir, recursive = T)}
+```
+
+```{r libs, warning=F, message=F, echo=F}
+library(dplyr)
+library(ggplot2)
+library(ggsci)
+
+library(Seurat)
+library(BPCells)
+library(patchwork)
+library(clusterProfiler)
+library(enrichplot)
+
+pal = c("#DA1819", "#00AED1", "#434D51","#EBB400","#691A93","#3AAD00")
+clusters = ggsci::pal_simpsons()(12)[c(1:7,9:12)]
+```
+
+## Read data
+
+```{r load_data}
+filt = readRDS(here(indir, "complete_analysis.rds"))
+filt
+head(filt@meta.data) 
+```
+
+```{r}
+filt$initial_clusters = filt$seurat_clusters
+filt[["initial.umap"]] = filt[["umap"]]
+```
+
+
+## Normalise with scTransform v2
+
+```{r}
+filt= SCTransform(filt)
+filt
+```
+
+### Run dimensionReduction + clustering to compare with basic data scaling
+
+```{r setup-variables}
+method_name="sct"
+red_name = paste("pca", sep=".", method_name)
+umap_name = paste("umap", sep=".", method_name)
+clu_name = paste( method_name, sep="_", "clusters")
+```
+
+```{r basic_analysis}
+filt <- RunPCA(filt, reduction.name =  red_name, dims = 1:20, verbose=F)
+filt <- FindNeighbors(filt, reduction =  red_name, dims = 1:20, verbose=F)
+filt <- FindClusters(filt, resolution = 0.5, cluster.name =  clu_name)
+filt <- RunUMAP(filt, reduction = red_name, dims = 1:20, reduction.name = umap_name)
+```
+
+```{r}
+DimPlot(filt, reduction = umap_name,  group.by = clu_name, label=T)
+DimPlot(filt, reduction = umap_name,  group.by = "orig.ident", label=T, cols=pal, label.color = "white", label.box = T)
+DimPlot(filt, reduction = umap_name,  group.by = "initial_clusters", label=T, cols=clusters)
+DimPlot(filt, reduction = "initial.umap",  group.by = clu_name, label=T)
+```
+
+Not necessarily useful; and makes the object large.  So save this incase we want to use later. 
+
+```{r}
+if (subset_data == FALSE){
+  saveRDS(filt, file = here(odir, "sct_norm_complete_analysis.rds"))
+}else if (subset_data){ #if subset, don't save complete analysis
+  saveRDS(filt,here(odir, "sct_norm_10%_subset_analysis.rds"))
+}
+```

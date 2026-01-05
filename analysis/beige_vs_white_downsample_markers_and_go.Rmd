@@ -1,0 +1,153 @@
+---
+title: "markers_and_go"
+author: "Sarah Hazell Pickering"
+date: "2025-02-20"
+output: html_document
+---
+
+
+```{r params}
+module="adipogenesis"
+dataname = "beige_vs_white_downsample"
+library(here); i_am(file.path("analysis", paste0(dataname,".Rmd")))
+
+odir = here("output", module, dataname) 
+load_data = T #loading data 
+subset_data = F
+```
+
+```{r libs, warning=F, message=F, echo=F}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(Seurat)
+library(BPCells)
+library(patchwork)
+```
+
+```{r themes}
+pal = c("#1F78B4", 
+        #"#B2DF8A",
+        "#85C2EA","#B3B3B3", "#F18486",
+        #"#FDBF6F",
+        "#E31A1C")
+clusters = #ggsci::pal_simpsons()(13)[c(1:7,9:13)]
+  tvthemes::gravityFalls_pal()(13)
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
+
+#define new theme
+theme_hp = theme_classic(base_size=15) + 
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth=0.25),
+        strip.background = element_blank(), # remove boxes around facet labels
+        )
+#set for all ggplots
+theme_set(theme_hp)
+
+knitr::opts_chunk$set(dev=c("png","pdf"))
+```
+
+
+## Marker genes
+```{r}
+norm.markers = read.delim(here(odir, "marker_genes.txt"))
+norm.markers$cluster = factor(norm.markers$cluster, levels=0:max(as.integer(norm.markers$cluster)))
+head(norm.markers)
+
+filt.markers = as.data.frame(norm.markers %>% filter( pct.1 > 0.5) %>%
+    arrange(avg_log2FC))
+```
+
+Add major time per cluster
+```{r}
+tcomp = read.delim(here(odir, "cluster_composition.txt"))
+time_per_cluster = group_by(tcomp, seurat_clusters, time) %>% summarise(n_cells = sum(n_cells)) %>% 
+  slice_max(n=1, order_by = n_cells) %>% select(seurat_clusters, time)
+time_per_cluster
+filt.markers = merge(filt.markers, time_per_cluster, by.x="cluster", by.y="seurat_clusters")
+head(filt.markers)
+```
+
+```{r}
+top.markers = as.data.frame(filt.markers %>% group_by(time,cluster) %>%
+    slice_max(n = 2, order_by = avg_log2FC))
+top.markers
+```
+
+
+### Marker plot
+```{r marker_gene_by_time}
+top.markers$gene = factor(top.markers$gene, levels=rev(unique(top.markers$gene)))
+overlap.to.plot = filter(top.markers, gene %in% top.markers$gene)
+overlap.to.plot$gene = factor(overlap.to.plot$gene, levels=levels(top.markers$gene))
+
+ggplot(overlap.to.plot, aes(y=gene, size=abs(avg_log2FC), color=cluster,
+                    x=cluster)) + 
+  geom_point(colour="black",aes(size = avg_log2FC*1.5)) + geom_point() +
+  scale_color_manual(values=clusters) + facet_grid(~time, scales="free_x", space="free_x")
+```
+
+## GO setup
+
+```{r}
+dfgo = read.delim(here(odir,"ORA_marker_genes.txt"))
+dfgo$cluster  = factor(dfgo$cluster, levels=0:max(as.integer(dfgo$cluster)))
+head(dfgo[c(1,3,5:8,11)])
+```
+
+
+
+
+
+```{r set_up_go_plot}
+go_to_plot = filter(dfgo, p.adjust < 0.01) %>% group_by(time, Cluster) %>%
+              slice_min(n = 2, order_by = data.frame(p.adjust, pvalue))
+```
+
+```{r go_replace}
+phrases= read.delim(here("data/gene_sets/abbreviations.txt"))
+recap= read.delim(here("data/gene_sets/capitalisations.txt"))
+```
+
+
+```{r abrev_go}
+drama_shorten = function(ont) {
+  for (x in 1:nrow(phrases)){
+    ont = gsub( phrases$phrase[x],phrases$abbreviation[x], ont, ignore.case = T)
+  }
+  a = abbreviate(gsub("_"," ", gsub("^[[:alpha:]]*_","",tolower(ont))),minlength=41, dot=T, named = F)
+  a = stringr::str_to_sentence(a)
+  for (i in 1:nrow(recap))
+    a = gsub(sprintf("\\b%s\\b", recap$lowercase[i]),recap$capital[i],a, ignore.case = T)
+  return(a)
+}
+go_to_plot$short_desc = drama_shorten(go_to_plot$ID)
+go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
+```
+
+
+## Cluster GO plot
+
+```{r cluster_go, dev=c('png','pdf')}
+p= ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+   geom_point(colour="black",aes(size = Count*1.5)) + geom_point() +scale_color_manual(values=clusters)+ 
+  theme(axis.title.y = element_blank())
+
+p + facet_grid(~time, scales="free_x", space = "free_x") + theme(axis.title.y = element_blank())
+```
+
+```{r cluster_go_overlapping, dev=c('png','pdf')}
+include_all_plot = filter(dfgo, Description %in% go_to_plot$Description & p.adjust < 0.01)
+include_all_plot$short_desc = factor(drama_shorten(include_all_plot$ID), levels=levels(go_to_plot$short_desc))
+#include_all_plot = merge(include_all_plot, time_per_cluster,by.x="cluster", by.y="seurat_clusters")
+a = ggplot(include_all_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point(colour="black",aes(size = Count*1.5)) + geom_point()+
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +scale_color_manual(values=clusters)
+a
+a + facet_grid(~time, scales="free_x", space = "free_x")
+```
+
+
+
+
+

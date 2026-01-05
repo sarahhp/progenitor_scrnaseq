@@ -1,0 +1,190 @@
+---
+title: "progenitors_integration_trial"
+output: html_document
+---
+
+Integrate donors using RPCA, FastMNN and Harmony
+
+Updating to run v5 of seurat. (based on original seurat_sct_integration_no_introns)
+
+```{r params}
+module="progenitors"
+dataname = "integration_trial"
+library(here); i_am(file.path("analysis",paste(module,sep="_",
+                                               paste0(dataname, ".Rmd"))))
+indir = here("output", module, "initial")
+odir = here("output", module, dataname) 
+
+load_data = T #Loading initial seurat analysis
+subset_data =  F
+
+if (!dir.exists(odir)){dir.create(odir, recursive = T)}
+```
+
+```{r libs, warning=F, message=F, echo=T}
+library(dplyr)
+library(ggplot2)
+library(ggsci)
+
+library(Seurat)
+library(BPCells)
+library(SeuratWrappers) #required for fastMNN
+
+pal = c("#DA1819", "#00AED1", "#434D51","#EBB400","#691A93","#3AAD00")
+clusters = ggsci::pal_simpsons()(12)[c(1:7,9:12)]
+```
+
+## Read data
+
+```{r load_data}
+if (subset_data){
+  filt = readRDS(here(indir, "10%_complete_analysis.rds"))
+  Idents(filt) = "seurat_clusters"
+} else{
+  filt = readRDS(here(indir, "complete_analysis.rds"))
+}
+
+filt[["RNA"]] <- split(filt[["RNA"]], f = filt$orig.ident)
+filt
+head(filt@meta.data) 
+```
+
+```{r}
+filt$initial_clusters = filt$seurat_clusters
+filt[["initial.umap"]] = filt[["umap"]]
+filt[["initial.tsne"]] = filt[["tsne"]]
+```
+
+```{r}
+DimPlot(filt, cols=clusters, label=T)
+DimPlot(filt, cols=clusters, label=T, reduction = "initial.tsne")
+```
+
+
+## RPCA Integration
+
+```{r setup-variables-rpca}
+method_name="rpca"
+red_name = paste("integrated", sep=".", method_name)
+umap_name = paste("umap", sep=".", method_name)
+clu_name = paste( method_name, sep="_", "clusters")
+```
+
+```{r}
+filt = IntegrateLayers(filt, method= RPCAIntegration, orig.reduction = "pca",
+                       new.reduction = red_name)
+```
+
+```{r}
+filt <- FindNeighbors(filt, reduction =  red_name, dims = 1:20, verbose=F)
+filt <- FindClusters(filt, resolution = 0.3, cluster.name =  clu_name)
+filt <- RunUMAP(filt, reduction = red_name, dims = 1:20, reduction.name = umap_name)
+```
+
+```{r}
+DimPlot(filt, reduction = umap_name,  group.by = clu_name, label=T)
+DimPlot(filt, reduction = umap_name,  group.by = "orig.ident", label=T, cols=pal, label.color = "white", label.box = T)
+DimPlot(filt, reduction = umap_name,  group.by = "initial_clusters", label=T, cols=clusters)
+DimPlot(filt, reduction = "initial.umap",  group.by = clu_name, label=T)
+```
+
+```{r}
+tsne_name = paste(method_name, "tsne", sep=".")
+filt = RunTSNE(filt, reduction = red_name, reduction.name = tsne_name, dims=1:20)
+```
+
+```{r}
+DimPlot(filt, reduction = tsne_name,  group.by = clu_name, label=T)
+DimPlot(filt, reduction = tsne_name,  group.by = "orig.ident", label=T, cols=pal, label.color = "white", label.box = T)
+DimPlot(filt, reduction = tsne_name,  group.by = "initial_clusters", label=T, cols=clusters)
+DimPlot(filt, reduction = "initial.tsne",  group.by = clu_name, label=T)
+```
+
+
+## Harmony Integration
+
+```{r setup-variables-harmony}
+method_name="harmony"
+red_name = paste("integrated", sep=".", method_name)
+umap_name = paste("umap", sep=".", method_name)
+clu_name = paste( method_name, sep="_", "clusters")
+```
+
+```{r}
+filt = IntegrateLayers(filt, method= HarmonyIntegration, orig.reduction = "pca",
+                       new.reduction = red_name)
+```
+
+```{r}
+filt <- FindNeighbors(filt, reduction =  red_name, dims = 1:20, verbose=F)
+filt <- FindClusters(filt, resolution = 0.3, cluster.name =  clu_name)
+filt <- RunUMAP(filt, reduction = red_name, dims = 1:20, reduction.name = umap_name)
+```
+
+```{r}
+DimPlot(filt, reduction = umap_name,  group.by = clu_name, label=T)
+DimPlot(filt, reduction = umap_name,  group.by = "orig.ident", label=T, cols=pal, label.color = "white", label.box = T)
+DimPlot(filt, reduction = umap_name,  group.by = "initial_clusters", label=T, cols=clusters)
+DimPlot(filt, reduction = "initial.umap",  group.by = clu_name, label=T)
+```
+
+```{r}
+tsne_name = paste(method_name, "tsne", sep=".")
+filt = RunTSNE(filt, reduction = red_name, reduction.name = tsne_name, dims=1:20)
+```
+
+```{r}
+DimPlot(filt, reduction = tsne_name,  group.by = clu_name, label=T)
+DimPlot(filt, reduction = tsne_name,  group.by = "orig.ident", label=T, cols=pal, label.color = "white", label.box = T)
+DimPlot(filt, reduction = tsne_name,  group.by = "initial_clusters", label=T, cols=clusters)
+DimPlot(filt, reduction = "initial.tsne",  group.by = clu_name, label=T)
+```
+
+## FastMNN
+
+```{r setup-variables-fastmnn}
+method_name="fastmnn"
+red_name = paste("integrated", sep=".", method_name)
+umap_name = paste("umap", sep=".", method_name)
+clu_name = paste( method_name, sep="_", "clusters")
+```
+
+```{r}
+filt = IntegrateLayers(filt, method= FastMNNIntegration, orig.reduction = "pca",
+                       new.reduction = red_name)
+```
+
+```{r}
+filt <- FindNeighbors(filt, reduction =  red_name, dims = 1:20, verbose=F)
+filt <- FindClusters(filt, resolution = 0.3, cluster.name =  clu_name)
+filt <- RunUMAP(filt, reduction = red_name, dims = 1:20, reduction.name = umap_name)
+```
+
+```{r}
+DimPlot(filt, reduction = umap_name,  group.by = clu_name, label=T)
+DimPlot(filt, reduction = umap_name,  group.by = "orig.ident", label=T, cols=pal, label.color = "white", label.box = T)
+DimPlot(filt, reduction = umap_name,  group.by = "initial_clusters", label=T, cols=clusters)
+DimPlot(filt, reduction = "initial.umap",  group.by = clu_name, label=T)
+```
+
+```{r}
+tsne_name = paste(method_name, "tsne", sep=".")
+filt = RunTSNE(filt, reduction = red_name, reduction.name = tsne_name, dims=1:20)
+```
+
+```{r}
+DimPlot(filt, reduction = tsne_name,  group.by = clu_name, label=T)
+DimPlot(filt, reduction = tsne_name,  group.by = "orig.ident", label=T, cols=pal, label.color = "white", label.box = T)
+DimPlot(filt, reduction = tsne_name,  group.by = "initial_clusters", label=T, cols=clusters)
+DimPlot(filt, reduction = "initial.tsne",  group.by = clu_name, label=T)
+```
+
+```{r save}
+if (subset_data == FALSE){
+  saveRDS(filt, file = file.path(odir,"complete_analysis.rds"))
+  sub = subset(filt, downsample=1000)
+  saveRDS(sub,here(odir,"10%_complete_analysis.rds"))
+} else if (subset_data){ #if subset, don't save complete analysis
+  saveRDS(filt,here(odir,"10%_subset_analysis.rds"))
+}
+```

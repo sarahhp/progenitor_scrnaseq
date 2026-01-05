@@ -1,0 +1,347 @@
+---
+title: "white_only_downsample"
+author: "Sarah Hazell Pickering"
+date: "2024-08-23"
+output: html_document
+---
+
+Basic analysis of gene-level counts using seurat v5.  Using white samples only (day0, day1 (rep1+2) and day3) and downsampling so that we have the same number of cells per time point (half each from the two day1 replicates).  
+
+
+todo: make self sufficient? for now linking the initial analysis files to output/
+
+```{r}
+module="adipogenesis"
+dataname = "white_only_downsample"
+library(here); i_am(file.path("analysis",paste0(dataname, ".Rmd")))
+indir = here("output", module, "initial_r2_only")
+odir = here("output", module, dataname) 
+if (!dir.exists(here(odir))){dir.create(here(odir), recursive = T)}
+```
+
+```{r }
+load_data = T #loading data from seurat object
+subset_data = F
+```
+
+```{r libs, warning=F, message=F, echo=F}
+library(dplyr)
+library(ggplot2)
+library(Seurat)
+library(BPCells)
+library(patchwork)
+library(clusterProfiler)
+library(enrichplot)
+```
+
+
+```{r themes, warning=F, message=F, echo=F}
+pal = c("#B3B3B3","#85C2EA","#B2DF8A","#1F78B4")
+clusters = ggsci::pal_simpsons()(13)[c(1:7,9:13)]
+  #tvthemes::gravityFalls_pal()(13)
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
+
+theme_hp = theme_classic(base_size=15) + 
+		  theme(axis.line = element_line(linewidth = 0.25),
+		        axis.ticks = element_line(linewidth=0.25),
+		        strip.background = element_blank(), # remove boxes around facet labels
+		        )
+		#set for all ggplots
+theme_set(theme_hp)
+```
+
+## Read data
+
+```{r}
+if (subset_data){
+  filt = readRDS(here(indir, "10%_subset_analysis.rds"))
+  Idents(filt) = "seurat_clusters"
+} else{
+  filt = readRDS(here(indir, "complete_analysis.rds"))
+}
+
+Idents(filt) = "orig.ident"
+table(Idents(filt))
+filt = subset(filt, idents=c("asc_day0","white_day1", "white_day1_rep2","white_day3"))
+filt$sample = factor(filt$sample, levels=c("asc_day0","white_day1", "white_day1_rep2","white_day3"))
+filt$orig.ident = filt$sample
+filt
+```
+
+```{r no_cells}
+ggplot(filt@meta.data) + geom_bar(aes(x=orig.ident, fill=orig.ident)) + 
+  scale_fill_manual(values=pal) + coord_cartesian(expand=F)
+```
+
+## Downsampling
+so each timepoint has the same number of cells
+This makes sure our clustering isn't biased towards timepoints with more cells. 
+```{r}
+sum(filt$sample == "asc_day0")
+wd3 = subset(filt, idents=c("asc_day0","white_day3"), downsample =  sum(filt$sample == "asc_day0"))
+wd3
+d1 =  subset(filt, idents=c("white_day1","white_day1_rep2"), downsample =  sum(filt$sample == "asc_day0")/2)
+d1
+
+sbs = merge(x=wd3,y=d1)
+sbs = JoinLayers(sbs)
+sbs
+table(sbs$time)
+```
+
+```{r}
+ggplot(sbs@meta.data) + geom_bar(aes(x=orig.ident, fill=orig.ident)) + 
+  scale_fill_manual(values=pal)+ coord_cartesian(expand=F)
+```
+
+
+## Normalisation 
+
+Feature counts for each cell are divided by the total counts for that cell and multiplied by the scale.factor. This is then natural-log transformed using log1p
+```{r lognorm}
+sbs= NormalizeData(sbs, normalization.method = "LogNormalize", scale.factor = 10000)
+sbs#161Mb
+```
+
+
+```{r variable_features}
+sbs <- FindVariableFeatures(sbs, selection.method = "vst", nfeatures = 2000)
+sbs #163Mb
+# Identify the 10 most highly variable genes
+top10 <- head(VariableFeatures(sbs), 10)
+
+# plot variable features with and without labels
+plot1 = VariableFeaturePlot(sbs)
+plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+plot2
+```
+
+
+```{r}
+all.genes = rownames(sbs)
+sbs = ScaleData(sbs, features=all.genes)
+```
+
+## PCA
+
+```{r pca}
+sbs = RunPCA (sbs, ndims.print=2)
+DimPlot(sbs, reduction = "pca", cols = pal, shuffle = T) + theme_hp
+DimPlot(sbs, reduction = "pca", cols = pal[c(1,2,4)], shuffle = T, group.by = "time")
+FeaturePlot(sbs, features= c("percent.mt","nCount_RNA","CHI3L1","ACTA2"))
+DimHeatmap(sbs, dims = 1:6, cells = 500, balanced = TRUE)
+```
+
+### Determine the dimensionality
+
+```{r elbow}
+ElbowPlot(sbs, ndims = 50)
+```
+
+## Cluster
+```{r cluster}
+sbs <- FindNeighbors(sbs, dims = 1:20)
+sbs <- FindClusters(sbs, resolution = 0.5)
+table(sbs@meta.data$seurat_clusters)
+```
+
+## Cluster composition
+
+```{r cluster_composition}
+composition = group_by(sbs@meta.data, orig.ident,seurat_clusters) %>% count()
+composition = composition[order(composition$n, decreasing = T),]
+colnames(composition) = c("orig.ident","seurat_clusters","n_cells")
+#calculate proportions directly, then plot percentage just for the three cyc;ling cells
+composition = group_by(composition, orig.ident) %>% mutate(cells_per_sample = n_cells/sum(n_cells),
+                                                           time =gsub("(white|asc)_","", gsub("_rep2","",orig.ident)))
+composition = group_by(composition, seurat_clusters) %>% mutate(cells_per_cluster = n_cells/sum(n_cells))
+head(composition)
+```
+
+
+```{r plot_composition}
+ggplot(composition) + geom_bar(stat="identity",aes(y=orig.ident, x=n_cells, fill=seurat_clusters)) + 
+  scale_y_discrete(limits=rev) + scale_fill_manual(values=clusters)+
+  coord_cartesian(expand = F)
+ggplot(composition) + geom_bar(stat="identity",aes(y=orig.ident, x=n_cells, fill=seurat_clusters), position = "fill") +
+  scale_y_discrete(limits=rev)+ scale_fill_manual(values=clusters)+
+  coord_cartesian(expand = F)
+ggplot(composition) + geom_bar(stat="identity",aes(fill=orig.ident, x=n_cells, y=seurat_clusters)) +
+  scale_y_discrete(limits=rev)+ scale_fill_manual(values=pal)+
+  coord_cartesian(expand = F)
+ggplot(composition) + geom_bar(stat="identity",aes(fill=orig.ident, x=n_cells, y=seurat_clusters), position = "fill") +
+  scale_y_discrete(limits=rev) + scale_fill_manual(values=pal)+
+  coord_cartesian(expand = F)
+```
+
+```{r composition_per_time, dev=c('png','pdf')}
+ggplot(composition) + geom_bar(stat="identity",aes(y=time, x=n_cells, fill=seurat_clusters), position = "fill") +
+  scale_y_discrete(limits=rev)+ 
+  scale_fill_manual(values=clusters, labels= function (x){gsub("^","a",x)}, name="Adipogenesis\nclusters") +
+  coord_cartesian(expand = F)
+```
+
+
+## UMAP
+```{r umap}
+sbs = RunUMAP(sbs, dims=1:20, n.neighbors = 20L)
+DimPlot(sbs, reduction="umap", label=T, shuffle = T, cols=clusters) 
+DimPlot(sbs, reduction="umap", split.by = "orig.ident", ncol=3, shuffle = T,  cols=clusters)
+DimPlot(sbs, group.by="orig.ident", cols=pal, shuffle = T)
+DimPlot(sbs, cols=pal[c(1,2,4)], shuffle = T, group.by="time")
+```
+
+## t-SNE
+```{r tsne}
+sbs = RunTSNE(sbs, reduction="pca", dims=1:20)
+DimPlot(sbs, reduction = "tsne",shuffle=T,  cols=clusters) + theme_hp
+DimPlot(sbs, reduction = "tsne", group.by= "orig.ident", shuffle = T, cols=pal)
+DimPlot(sbs,  reduction = "tsne", cols=pal[c(1,2,4)], shuffle = T, group.by="time")
+```
+
+
+## Find biomarkers
+Min.pct sets the minimum percentage of cells for a marker to be found in
+
+Does densify, which increases speed at the cost of memory help?  
+```{r densify}
+norm.markers = FindAllMarkers(sbs, only.pos = T, min.pct=0.25, 
+                              logfc.threshold = 0.5, densify=T)
+head(norm.markers); dim(norm.markers)
+norm.markers = filter(norm.markers, p_val_adj < 0.01)
+table(norm.markers$cluster)
+
+top.markers = as.data.frame(norm.markers %>%
+    group_by(cluster) %>%
+    slice_max(n = 2, order_by = avg_log2FC))
+top.markers
+```
+ 
+```{r top_markers, dev=c('png','pdf')}
+DotPlot(sbs, features=rev(unique(top.markers$gene)), group.by = "seurat_clusters") & 
+  scale_colour_gradientn(colours = spectral) & coord_flip()
+
+top.markers$gene = factor(top.markers$gene, levels=rev(unique(top.markers$gene)))
+overlap.to.plot = filter(top.markers, gene %in% top.markers$gene)
+overlap.to.plot$gene = factor(overlap.to.plot$gene, levels=levels(top.markers$gene))
+
+ggplot(overlap.to.plot, aes(y=gene, size=abs(avg_log2FC), color=cluster,
+                    x=cluster)) + 
+  geom_point() + 
+  theme(axis.text.x=element_text(angle=30, hjust=1))  + 
+  scale_color_manual(values=clusters)
+```
+
+```{r}
+include_all_plot = filter(norm.markers, gene %in% overlap.to.plot$gene & p_val_adj< 0.01)
+include_all_plot$gene = factor(include_all_plot$gene, levels=levels(top.markers$gene))
+
+a = ggplot(include_all_plot, aes(x=cluster, y=gene, colour=cluster, size=avg_log2FC)) + 
+  geom_point()+  
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +scale_color_manual(values=clusters)
+a
+
+
+a = ggplot(include_all_plot, aes(x=cluster, y=gene, colour=cluster, size=pct.1)) + 
+  geom_point()+  
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +scale_color_manual(values=clusters)
+a
+```
+
+
+
+Visualisation methods
+
+```{r marker_vis}
+VlnPlot(sbs, features = c("MGP","ADIPOQ"))
+FeaturePlot(sbs, features = c("MGP","ADIPOQ","MT-ATP8","ACTA2")) 
+top.markers$gene = as.character(top.markers$gene)
+
+for (i in 1:(length(top.markers$gene)/4)){
+  start = ((i-1)*4)+1; print(start)
+  end = i*4; print(end)
+  print(FeaturePlot(sbs, features = top.markers$gene[start:end]))
+}
+
+FeaturePlot(sbs, features = c("percent.mt", "nCount_RNA","nFeature_RNA"))
+FeaturePlot(sbs, features = c("PC_1","PC_2","PC_3","PC_4"))
+```
+
+
+```{r}
+norm.markers %>%
+    group_by(cluster) %>%
+    top_n(n = 10, wt = avg_log2FC) -> top10
+DoHeatmap(subset(sbs,downsample=100), features= top10$gene)
+```
+
+
+## Cluster GO
+
+### set up
+
+```{r load_go}
+molsig <- clusterProfiler::read.gmt(here("data/gene_sets/msigdb.v2024.1.Hs.symbols.gmt"))
+head(molsig); nrow(molsig)
+##Pick gene sets to look in bcos all is a lot
+prefixes = c("HALLMARK", "KEGG","REACTOME", "WP", "GOBP", "GOCC","GOMF")
+colnames(molsig) = c("term","gene")
+some.molsig = molsig[gsub("_.*","", molsig$term) %in% prefixes,]
+some.molsig$term = factor(some.molsig$term)
+table(gsub("_.*","", some.molsig$term))
+```
+
+```{r}
+shorten = function(ont) {
+  abbreviate(gsub("_"," ", tolower(ont)),minlength=40, dot=T, named = F)
+}
+```
+
+### Run 
+
+```{r}
+norm.markers$cluster = factor(norm.markers$cluster, levels =0:max(as.integer(norm.markers$cluster)))
+all.genes = rownames(sbs)
+```
+
+```{r run_go}
+clgo = compareCluster(gene~cluster, data=norm.markers, 
+                      fun="enricher", TERM2GENE = some.molsig, universe = all.genes)
+clgo = mutate(clgo, cluster = factor(cluster, levels=0:max(as.integer(as.character(cluster)))),
+              abbrev_ID = shorten(ID))
+head(clgo)[,c(2,4:10)]
+```
+
+### GO Plots 
+```{r go_plot}
+p = dotplot(clgo, x="cluster", showCategory=2, includeAll=F) 
+p+ scale_y_discrete(labels=shorten(levels(p$data$Description)))
+
+p = dotplot(filter(clgo,!grepl("^(WP|KEGG|REACTOME)_",ID)), x="cluster", showCategory=2, includeAll=F) 
+p+ scale_y_discrete(labels=shorten(levels(p$data$Description)))
+
+p = dotplot(clgo, x="cluster", showCategory=2) 
+p+ scale_y_discrete(labels=shorten(levels(p$data$Description)))
+```
+
+
+## save
+
+```{r save}
+if (subset_data == F){
+  saveRDS(sbs, file = here(odir, "complete_analysis.rds"))
+  write.table(norm.markers, here(odir,"marker_genes.txt"),
+            sep="\t", row.names = F)
+  write.table(clgo, here(odir, "ORA_marker_genes.txt"),
+            sep="\t", row.names = F)
+  write.table(composition, here(odir, "cluster_composition.txt"),
+              sep="\t", row.names = F)
+  Idents(sbs) = "orig.ident"
+  sbs = subset(sbs, downsample=1000)
+  saveRDS(sbs, file = here(odir, "10%_complete_analysis.rds"))
+} else if (subset_data){
+  saveRDS(sbs, file = here(odir, "10%_subset_analysis.rds"))
+}
+```
+
+

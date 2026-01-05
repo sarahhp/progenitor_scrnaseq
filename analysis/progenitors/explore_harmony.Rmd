@@ -1,0 +1,238 @@
+---
+title: "explore_harmony"
+author: "Sarah Hazell Pickering"
+date: "2024-08-09"
+output: html_document
+---
+
+Integrated data using Harmony, plotting and deciding on cluster number
+
+```{r params}
+module="progenitors"
+dataname = "harmony"
+library(here);# i_am(file.path("analysis",paste(module,sep="_",dataname, "clusters_and_markers.Rmd")))
+i_am("analysis/progenitors/explore_harmony.Rmd")
+indir = here("output", module, "integration_trial")
+odir = here("output", module, dataname) 
+
+load_data = T #Loading initial seurat analysis
+subset_data =  F
+
+if (!dir.exists(odir)){dir.create(odir, recursive = T)}
+```
+
+```{r libs, warning=F, message=F, echo=T}
+library(dplyr)
+library(ggplot2)
+library(ggsci)
+
+library(Seurat)
+library(BPCells)
+
+library(clusterProfiler)
+library(enrichplot)
+pal = c("#DA1819", "#00AED1", "#434D51","#EBB400","#691A93","#3AAD00")
+clusters = ggsci::pal_simpsons()(13)[c(1:7,9:13)]
+spectral =  rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
+```
+
+```{r setup-variables-harmony}
+method_name="harmony"
+red_name = paste("integrated", sep=".", method_name)#TOdo change to integrated
+umap_name = paste("umap", sep=".", method_name)
+clu_name = paste( method_name, sep="_", "clusters")
+```
+## Read data
+
+```{r load_data}
+if (subset_data){
+  filt = readRDS(here(indir, "10%_complete_analysis.rds"))
+} else{
+  filt = readRDS(here(indir, "complete_analysis.rds"))
+}
+filt[["mnn.reconstructed"]] =NULL
+filt = JoinLayers(filt)
+Idents(filt) = clu_name
+filt
+head(filt@meta.data) 
+table(filt$harmony_clusters)
+```
+
+## Todo: remove other integrations
+```{r}
+
+```
+
+
+
+```{r}
+DimPlot(filt, reduction = umap_name,  group.by=clu_name, combine=F, cols = clusters)
+```
+
+
+
+## Composition
+
+```{r}
+DimPlot(filt, split.by="subject", reduction = umap_name, ncol=3, group.by="subject", combine=F, cols = pal)
+
+DimPlot(filt, split.by="subject", reduction = umap_name, ncol=3, group.by=clu_name, combine=F, cols = clusters)
+```
+
+```{r}
+composition = group_by(filt@meta.data, subject,harmony_clusters) %>% count()
+composition = composition[order(composition$n, decreasing = T),]
+colnames(composition) = c("donor_id","seurat_clusters","n_cells")
+head(composition)
+```
+
+
+```{r donor_composition, dev=c('png','pdf')}
+ggplot(composition) + geom_bar(stat="identity",aes(y=donor_id, x=n_cells, fill=seurat_clusters)) + 
+  scale_y_discrete(limits=rev)+ scale_x_continuous(expand = c(0.01, 0))+ 
+  theme_classic(base_size=15) + scale_fill_manual(values=clusters)
+ggplot(composition) + geom_bar(stat="identity",aes(y=donor_id, x=n_cells, fill=seurat_clusters), position = "fill") +
+  scale_y_discrete(limits=rev)+ scale_x_continuous(expand = c(0.01, 0))+ 
+  theme_classic(base_size=15)  + scale_fill_manual(values=clusters)
+```
+
+```{r cluster_composition, dev=c('png','pdf')}
+ggplot(composition) + geom_bar(stat="identity",aes(fill=donor_id, x=n_cells, y=seurat_clusters)) +
+    scale_y_discrete(limits=rev)+ scale_fill_manual(values=pal)  + scale_x_continuous(expand = c(0.01, 0))+ 
+  theme_classic(base_size=15)
+ggplot(composition) + geom_bar(stat="identity",aes(fill=donor_id, x=n_cells, y=seurat_clusters), position = "fill") +
+  scale_y_discrete(limits=rev)+ scale_fill_manual(values=pal)  + scale_x_continuous(expand = c(0.01, 0))+ 
+  theme_classic(base_size=15)
+```
+
+## Top PCs
+dominated by cell cycle
+
+```{r}
+table(filt$harmony_clusters)
+DimPlot(filt, reduction=red_name, group.by = clu_name, cols=clusters)
+DimPlot(filt, reduction=red_name, group.by = clu_name, cols=clusters, dims = c(3,4))
+DimPlot(filt, reduction=red_name, group.by = clu_name, cols=clusters, dims = c(5,6))
+DimPlot(filt, reduction=red_name, group.by = clu_name, cols=clusters, dims = c(7,8))
+```
+## Quality control metrics
+
+Subject S2 has a low gene/ count population
+
+```{r}
+FeaturePlot(filt, reduction = umap_name, 
+            features=c("nFeature_RNA","nCount_RNA","percent.mt","RPL27A")) & 
+  scale_color_gradientn(colours=spectral)
+VlnPlot(filt, group.by= clu_name, pt.size=0, cols=clusters,
+            features=c("nFeature_RNA","nCount_RNA","percent.mt"))
+```
+
+```{r}
+FeatureScatter(filt,feature1="nFeature_RNA",feature2 = "percent.mt", 
+               group.by="subject", cols=pal, 
+               split.by = "harmony_clusters", ncol=4, pt.size=0.2,
+               shuffle=T)
+```
+
+## Find Marker genes
+```{r densify}
+cluster.markers = FindAllMarkers(filt, min.pct=0.25, logfc.threshold=0.5, 
+                              densify=T, only.pos=T)
+head(cluster.markers); dim(cluster.markers)
+table(filter(cluster.markers,p_val_adj < 0.01) %>% pull(cluster))
+
+top.markers = as.data.frame(cluster.markers) %>%
+    group_by(cluster) %>% filter(p_val_adj < 0.01) %>%
+    slice_max(n=2, order_by = avg_log2FC*pct.1)
+top.markers
+```
+
+### Dot plots
+```{r}
+DotPlot(filt, features=rev(unique(top.markers$gene))) & 
+  scale_colour_gradientn(colours = spectral) & coord_flip()
+
+top.markers$gene = factor(top.markers$gene, levels=rev(unique(top.markers$gene)))
+overlap.to.plot = filter(cluster.markers, gene %in% top.markers$gene)
+overlap.to.plot$gene = factor(overlap.to.plot$gene, levels=levels(top.markers$gene))
+
+ggplot(overlap.to.plot, aes(y=gene, size=abs(avg_log2FC), color=cluster,
+                    x=cluster)) + 
+  geom_point() + 
+  theme_bw(base_size=15)  + 
+  theme(axis.text.x=element_text(angle=30, hjust=1))  + 
+  scale_color_manual(values=clusters)
+```
+
+
+## GO setup
+```{r}
+molsig <- clusterProfiler::read.gmt("/projects/imb-pkbphil/sp/annotations/molsigdb/msigdb.v2023.1.Hs.symbols.gmt")
+head(molsig); nrow(molsig)
+##Pick gene sets to look in bcos all is a lot
+prefixes = c("HALLMARK", "KEGG","REACTOME", "WP", "GOBP", "GOCC","GOMF")
+colnames(molsig) = c("term","gene")
+some.molsig = molsig[gsub("_.*","", molsig$term) %in% prefixes,]
+some.molsig$term = factor(some.molsig$term)
+table(gsub("_.*","", some.molsig$term))
+
+shorten = function(ont) {
+  abbreviate(gsub("_"," ", tolower(ont)),minlength=40, dot=T, named = F)
+}
+```
+## Cluster GO
+
+```{r}
+all.genes=rownames(filt)
+clgo = compareCluster(gene~cluster, data=filter(cluster.markers,p_val_adj < 0.01), 
+                      fun="enricher", TERM2GENE = some.molsig, universe = all.genes)
+
+clgo = mutate(clgo, cluster = factor(cluster, levels=c(0,1:max(as.integer(cluster)))))
+table(clgo@compareClusterResult$cluster)
+head(clgo)[,c(2,4:9)]
+nrow(filter(clgo, p.adjust < 0.01))
+summary(clgo@compareClusterResult$p.adjust)
+
+dotplot(filter(clgo,p.adjust < 0.01), x="cluster", showCategory=2) 
+dotplot(clgo, x="cluster", showCategory=2, includeAll=F) 
+```
+
+```{r cluster_go_unique, dev=c("png","pdf")}
+dfgo = as.data.frame(clgo)
+dfgo$short_desc =shorten(dfgo$Description)
+go_to_plot = filter(dfgo, p.adjust < 0.01) %>% group_by(cluster) %>%
+              slice_min(n = 2, order_by = p.adjust)
+go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
+
+p = ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point()+  theme_bw(base_size=15) + 
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +scale_color_manual(values=clusters)
+p
+```
+
+```{r cluster_go_overlapping, dev=c("png","pdf")}
+include_all_plot = filter(dfgo, Description %in% go_to_plot$Description & p.adjust < 0.01)
+include_all_plot$short_desc = factor(include_all_plot$short_desc, levels=levels(go_to_plot$short_desc))
+a = ggplot(include_all_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point()+  theme_bw(base_size=15) + 
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +scale_color_manual(values=clusters)
+a
+```
+
+```{r save}
+if (subset_data == FALSE){
+  saveRDS(filt, file = here(odir, "complete_analysis.rds"))
+  write.table(cluster.markers, here (odir, "marker_genes.txt"),
+            sep="\t", row.names = F)
+  write.table(composition, here(odir, "cluster_composition.txt"),
+              sep="\t", row.names = F)
+  write.table(dfgo, here (odir, "ORA_marker_genes.txt"),
+            sep="\t", row.names = F)
+  sub = subset(filt, downsample=1000)
+  saveRDS(sub,here(odir,"10%_complete_analysis.rds"))
+} else if (subset_data){ #if subset, don't save complete analysis
+  saveRDS(filt,here(odir,"10%_subset_analysis.rds"))
+  write.table(cluster.markers, file.path(odir,dataname, "10%_subset_marker_genes.txt"),
+            sep="\t", row.names = F)
+}
+```

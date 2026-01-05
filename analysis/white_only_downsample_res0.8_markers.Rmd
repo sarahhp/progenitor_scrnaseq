@@ -1,0 +1,609 @@
+---
+title: "markers_and_go"
+author: "Sarah Hazell Pickering"
+date: "2024-08-29"
+output: html_document
+---
+
+```{r params}
+module="adipogenesis"
+dataname = "white_only_downsample_res0.8"
+library(here); i_am(file.path("analysis",paste0(dataname, ".Rmd")))
+odir = here("output", module, dataname) 
+
+load_data = T #loading data 
+subset_data = F
+```
+
+
+```{r libs, warning=F, message=F, echo=F}
+library(dplyr)
+library(ggplot2)
+library(ggsci)
+
+library(Seurat)
+library(BPCells)
+library(patchwork)
+knitr::opts_chunk$set(dev=c('png','pdf'))
+```
+
+## themes
+
+```{r themes}
+pal = c("#B3B3B3","#85C2EA","#B2DF8A","#1F78B4")
+names(pal) = c("day0", "day1", "day1_rep2","day3")
+clusters = ggsci::pal_simpsons()(13)[c(1:7,9:13)]
+clusters = c(clusters, "purple4",  "#ff1493","#474747", "#9248A7" )
+  #tvthemes::gravityFalls_pal()(16)
+names(clusters) = 0:(length(clusters)-1)
+figure_order = as.character(c(13,12,10,4,7,1,15,9,0,2,14,11,8,3,5,6))
+
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
+
+theme_hp = theme_classic(base_size=15) + 
+		  theme(axis.line = element_line(linewidth = 0.25),
+		        axis.ticks = element_line(linewidth=0.25),
+		        strip.background = element_blank(), # remove boxes around facet labels
+		        )
+		#set for all ggplots
+theme_set(theme_hp)
+```
+
+## Load Seurat object & set cluster order
+```{r}
+if (subset_data){
+  sbs = readRDS(here(odir, "10%_subset_analysis.rds"))
+} else {
+  sbs = readRDS(here(odir, "complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+sbs
+#format clusters
+sbs$fclusters = factor(sbs$seurat_clusters, levels=figure_order)
+```
+### UMAP
+```{r}
+DimPlot(sbs, reduction="umap", group.by="time", cols=pal[c(1,2,4)])
+DimPlot(sbs, reduction="umap", cols=clusters, pt.size = 0.4)
+DimPlot(sbs, reduction="umap", cols=clusters, pt.size = 0.4, label=T)
+```
+## Functions
+```{r}
+shorten = function(ont) {
+  abbreviate(gsub("_"," ", tolower(ont)),minlength=40, dot=T, named = F)
+}
+```
+
+
+Function to intelligently abbreviate GO terms and correct the capitalisation of initialisations based on the above lists.  To do: save these lists to file to make reproducible and concise.   
+
+```{r abrev_go}
+phrases= read.delim(here("data/gene_sets/abbreviations.txt"))
+recap= read.delim(here("data/gene_sets/capitalisations.txt"))
+
+drama_shorten = function(ont) {
+  for (x in 1:nrow(phrases)){
+    ont = gsub( phrases$phrase[x],phrases$abbreviation[x], ont, ignore.case = T)
+  }
+  a = abbreviate(gsub("_"," ", gsub("^[[:alpha:]]*_","",tolower(ont))),minlength=41, dot=T, named = F)
+  a = stringr::str_to_sentence(a)
+  for (i in 1:nrow(recap))
+    a = gsub(sprintf("\\b%s\\b", recap$lowercase[i]),recap$capital[i],a, ignore.case = T)
+  return(a)
+}
+```
+
+
+
+## Load markers 
+
+```{r}
+all.genes = rownames(sbs)
+```
+
+```{r}
+norm.markers = read.delim(here(odir, "marker_genes.txt"))
+norm.markers = filter(norm.markers, p_val_adj < 0.01)
+norm.markers$cluster = factor(norm.markers$cluster, levels=0:(length(unique(norm.markers$cluster))-1))
+table(norm.markers$cluster, useNA="ifany")
+uniq.norm.markers = norm.markers[!norm.markers$gene %in% names(which(table(norm.markers$gene) > 1)),]
+head(norm.markers)
+```
+
+### Marker Genes 
+plots genes sorted by logFC * pct.1
+```{r}
+top.markers = as.data.frame(norm.markers %>%
+    group_by(cluster) %>% filter(pct.1 > 0.7) %>% #also adding a minimum filter to show CD36 instead of LINC01197 for cluster a11
+    slice_max(n = 2, order_by = avg_log2FC*pct.1))
+top.markers
+```
+ 
+```{r top_markers_logfc_pct1, dev=c('png','pdf')}
+DotPlot(sbs, features=rev(unique(top.markers$gene)), group.by = "seurat_clusters") & 
+  scale_colour_gradientn(colours = spectral) & coord_flip()
+
+top.markers$gene = factor(top.markers$gene, levels=rev(unique(top.markers$gene)))
+overlap.to.plot = filter(top.markers, gene %in% top.markers$gene)
+overlap.to.plot$gene = factor(overlap.to.plot$gene, levels=levels(top.markers$gene))
+
+ggplot(overlap.to.plot, aes(y=gene, size=abs(avg_log2FC), color=cluster,
+                    x=cluster)) + 
+  geom_point()  +
+  scale_color_manual(values=clusters, guide="none") +
+  scale_x_discrete(labels=function (x){gsub("^","a",x)}, name="Adipogenesis clusters") +
+  ylab("") + scale_size_continuous(name="log2FC")
+```
+
+```{r}
+overlap.to.plot = mutate(overlap.to.plot, cluster = factor(cluster, levels=figure_order)) %>% arrange(cluster)
+overlap.to.plot$gene = factor(overlap.to.plot$gene, levels=unique(rev(overlap.to.plot$gene)))
+ggplot(overlap.to.plot, aes(y=gene, size=abs(avg_log2FC), color=cluster,
+                    x=cluster)) + 
+  geom_point()  +
+  scale_color_manual(values=clusters, guide="none") +
+  scale_x_discrete(labels=function (x){gsub("^","a",x)}, name="Adipogenesis clusters") +
+  ylab("") + scale_size_continuous(name="log2FC")
+```
+
+```{r top_markers_overlap}
+include_all_plot = filter(norm.markers, gene %in% overlap.to.plot$gene & p_val_adj< 0.01)
+include_all_plot$gene = factor(include_all_plot$gene, levels=levels(top.markers$gene))
+
+a = ggplot(include_all_plot, aes(x=cluster, y=gene, colour=cluster, size=avg_log2FC)) + 
+  geom_point()+  
+    scale_color_manual(values=clusters, guide="none") +
+  scale_x_discrete(labels=function (x){gsub("^","a",x)}, name="Adipogenesis clusters") +
+  ylab("") + scale_size_continuous(name="log2FC")
+a
+
+
+include_all_plot = mutate(include_all_plot, cluster = factor(cluster, levels=figure_order)) %>% arrange(cluster)
+include_all_plot$gene = factor(include_all_plot$gene, levels=unique(rev(include_all_plot$gene)))
+
+a = ggplot(include_all_plot, aes(x=cluster, y=gene, colour=cluster, size=avg_log2FC)) + 
+  geom_point()+  
+    scale_color_manual(values=clusters, guide="none") +
+  scale_x_discrete(labels=function (x){gsub("^","a",x)}, name="Adipogenesis clusters") +
+  ylab("") + scale_size_continuous(name="log2FC")
+a
+```
+
+## set up GO plots
+
+```{r}
+library(clusterProfiler)
+library(enrichplot)
+```
+
+```{r load_go}
+molsig <- clusterProfiler::read.gmt("/projects/imb-pkbphil/sp/annotations/molsigdb/msigdb.v2024.1.Hs.symbols.gmt")
+head(molsig); nrow(molsig)
+##Pick gene sets to look in bcos all is a lot
+prefixes = c("HALLMARK", "KEGG","REACTOME", "WP", "GOBP", "GOCC","GOMF")
+colnames(molsig) = c("term","gene")
+some.molsig = molsig[gsub("_.*","", molsig$term) %in% prefixes,]
+some.molsig$term = factor(some.molsig$term)
+table(gsub("_.*","", some.molsig$term))
+```
+
+### Rerun GO 
+
+
+```{r run_go}
+clgo = compareCluster(gene~cluster, data=norm.markers, 
+                      fun="enricher", TERM2GENE = some.molsig, universe = all.genes)
+```
+
+
+```{r go_plots}
+clgo = mutate(clgo, cluster = factor(cluster, levels=0:max(as.integer(as.character(cluster)))),
+              abbrev_ID = drama_shorten(ID))
+head(clgo)[,c(2,4:10)]
+
+p = dotplot(clgo, x="cluster", showCategory=2, includeAll=F) 
+p+ scale_y_discrete(labels=drama_shorten(levels(p$data$Description)))
+
+p = dotplot(filter(clgo,!grepl("^(WP|KEGG|REACTOME)_",ID)), x="cluster", showCategory=2, includeAll=F) 
+p+ scale_y_discrete(labels=drama_shorten(levels(p$data$Description))) 
+
+p = dotplot(clgo, x="cluster", showCategory=2) 
+p+ scale_y_discrete(labels=drama_shorten(levels(p$data$Description)))
+```
+
+```{r}
+write.table(clgo, here(odir, "ORA_marker_genes_2024.txt"),
+            sep="\t", quote=F, row.names = F)
+```
+
+
+### coloured GO plot
+
+```{r go_all}
+dfgo = as.data.frame(clgo)
+dfgo$cluster = factor(dfgo$cluster, levels=0:max(as.integer(dfgo$cluster)))
+dfgo$short_desc =drama_shorten(dfgo$Description)
+go_to_plot = filter(dfgo, p.adjust < 0.01) %>% group_by(cluster) %>%
+              slice_min(n = 3, order_by = data.frame(p.adjust, pvalue))
+go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
+
+p = ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point()+   
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +scale_color_manual(values=clusters)
+p
+```
+
+
+```{r go_time_order}
+go_to_plot = mutate(go_to_plot, cluster=factor(cluster, levels=levels(sbs$fclusters))) %>% 
+  arrange(desc(cluster)) %>% mutate(short_desc = factor(short_desc, levels = unique(short_desc)))
+
+head(go_to_plot)
+p = ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point()+
+  theme(axis.text.x=element_text(angle=45, hjust=1)) +
+  scale_color_manual(values=clusters, guide="none") +
+  scale_x_discrete(labels=function (x){gsub("^","a",x)}, name="Adipogenesis clusters", 
+                   limits = levels(sbs$fclusters)) +
+  ylab("") + scale_size_continuous(name="Genes")
+p
+```
+
+```{r go_wo_wp}
+go_to_plot = filter(dfgo, p.adjust < 0.01 & !grepl("^wp", short_desc)) %>% group_by(cluster) %>%
+              slice_min(n = 3, order_by = data.frame(p.adjust,pvalue))
+go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
+
+p = ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point()+
+  theme(axis.text.x=element_text(angle=45, hjust=1)) +
+  scale_color_manual(values=clusters, guide="none") +
+  scale_x_discrete(labels=function (x){gsub("^","a",x)}, name="Adipogenesis clusters", ) +
+  ylab("") + scale_size_continuous(name="Genes")
+p
+```
+
+
+```{r cluster_go_overlapping}
+overlap.to.plot = filter(dfgo, Description %in% go_to_plot$Description & p.adjust < 0.01) %>%
+  mutate( cluster=factor(cluster, levels=levels(sbs$fclusters))) %>% 
+  arrange(desc(cluster)) %>% mutate(short_desc = factor(short_desc, levels = unique(short_desc)))
+a = ggplot(overlap.to.plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point()+
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +scale_color_manual(values=clusters, guide="none") +
+  scale_x_discrete(labels=function (x){gsub("^","a",x)}, name="Adipogenesis clusters", limits = levels(sbs$fclusters)) +
+  ylab("") + scale_size_continuous(name="Genes")
+a
+ggsave(here(odir, "cluster_go_overlapping.pdf"), height = 7, width=9)
+```
+
+convert df of top 2 Go terms per cluster to a list of Go terms and genes
+```{r}
+top2_terms = go_to_plot[["ID"]]
+top2_genelist = list()
+for (n in unique(top2_terms)){
+  top2_genelist[[n]] = some.molsig$gene[some.molsig$term == n]
+}
+str(top2_genelist)
+```
+
+
+### Heatmap
+```{r}
+library(ComplexHeatmap)
+
+## average gene expression per ontology term
+sbs = AddModuleScore(sbs, features = top2_genelist, name="top2GO")
+colnames(sbs@meta.data)[grep("top2GO",colnames(sbs@meta.data))] = names(top2_genelist)
+
+head(sbs@meta.data)
+filt = subset(sbs, downsample=100)
+go_matrix= filt@meta.data[names(top2_genelist)]
+cell_ids = filt@meta.data[c("time","fclusters")]
+go_matrix = t(scale(data.matrix(go_matrix)))
+go_matrix[1:3,1:3]
+```
+
+```{r go_heatmap}
+rownames(go_matrix) = drama_shorten(rownames(go_matrix))
+ha = HeatmapAnnotation(cluster = cell_ids$fclusters, col = list(cluster=clusters), show_legend = F,
+                       show_annotation_name = F)
+hb = HeatmapAnnotation(time = cell_ids$time, col=list(time=pal), show_legend=F,
+                       show_annotation_name=T, annotation_name_side = "left")
+h =Heatmap(go_matrix, show_column_names = F, column_split = cell_ids$fclusters, 
+        cluster_columns = F, show_heatmap_legend = F, 
+        top_annotation = ha, bottom_annotation = hb,
+        row_names_max_width = unit(9,"cm"))
+h
+
+```
+
+
+```{r go_heatmap_legend}
+h =Heatmap(go_matrix, show_column_names = F, column_split = cell_ids$fclusters, 
+        cluster_columns = F, top_annotation = ha, bottom_annotation = hb, 
+        row_names_max_width = unit(7,"cm"), name="Scaled\nexpression")
+h
+```
+
+
+## Adipogenesis markers
+
+```{r}
+FeaturePlot(sbs, reduction="tsne", features=c("ADIPOQ","LPL","PPARG","CEBPA"))
+```
+
+```{r}
+FeaturePlot(sbs, reduction="tsne", features=c("MGP","DCN","CEBPD","CEBPB"))
+```
+
+
+
+
+## UPR 
+
+### GO for clusters 6 and 8
+```{r}
+uprgo = filter(dfgo,cluster %in% c(6,8)) %>% group_by(cluster) %>%
+              slice_min(n = 10, order_by = p.adjust)
+
+a = ggplot(uprgo, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point()+
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +scale_color_manual(values=clusters[c(7,9)])
+a
+
+uprgo = filter(dfgo,cluster %in% c(6,8)) %>% group_by(cluster) %>%
+              slice_min(n = 10, order_by = p.adjust)
+uprgo$mid_desc = gsub("_INCLUDES_BOTH.*","_...", gsub("GOBP_CELLULAR_RESPONSE_TO_","CELL_RESPONSE_", 
+                                                      gsub("ENDOPLASMIC_RETICULUM","ER",uprgo$Description)))
+```
+
+trying to order the GO terms so ts more readable which is similar and which different.  
+```{r eval=F}
+table(uprgo$mid_desc, uprgo$cluster)
+
+unique(uprgo$mid_desc)[order(table(uprgo$mid_desc))]
+table(uprgo$mid_desc)
+```
+
+
+```{r}
+a = ggplot(uprgo, aes(x=cluster, y=mid_desc, colour=cluster, size=Count)) + 
+  geom_point()+  theme_bw(base_size=12) + 
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +scale_color_manual(values=clusters[c(7,9)])
+a
+```
+
+
+
+## Unique UPR
+```{r}
+uprgo = filter(dfgo,cluster %in% c(6,8)) %>% group_by(cluster) %>%
+              slice_min(n = 10, order_by = p.adjust)
+
+a = ggplot(uprgo, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point()+  
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +scale_color_manual(values=clusters)
+a
+
+uprgo = filter(dfgo,cluster %in% c(6,8)) %>% group_by(cluster) %>%
+              slice_min(n = 4, order_by = p.adjust)
+uprgo$mid_desc = gsub("_INCLUDES_BOTH.*","_...", gsub("GOBP_CELLULAR_RESPONSE_TO_","CELL_RESPONSE_", 
+                                                      gsub("ENDOPLASMIC_RETICULUM","ER",uprgo$Description)))
+
+a = ggplot(uprgo, aes(x=cluster, y=mid_desc, colour=cluster, size=Count)) + 
+  geom_point()+  theme_bw(base_size=12) + 
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +scale_color_manual(values=clusters[c(7,9)])
+a
+```
+
+## HALLMARK gene sets
+
+```{r}
+sbs = AddModuleScore(sbs, features = list(upr = some.molsig$gene[some.molsig$term == "HALLMARK_UNFOLDED_PROTEIN_RESPONSE"],
+                                    adipo = some.molsig$gene[some.molsig$term == "HALLMARK_ADIPOGENESIS"],
+                                    erstress = some.molsig$gene[some.molsig$term == "GOBP_RESPONSE_TO_ENDOPLASMIC_RETICULUM_STRESS"]),
+               name="hallmark")
+colnames(sbs@meta.data)[grep("hallmark",colnames(sbs@meta.data))] = c("UPR","ADIPO","ERSTRESS")
+```
+
+```{r adipo_er_featureplots}
+FeaturePlot(sbs,  features = c("UPR","ADIPO","ERSTRESS")) & scale_color_gradientn(colours=spectral)
+FeaturePlot(sbs,features = c("UPR"), pt.size=0.4) & scale_color_gradientn(colours=spectral)
+FeaturePlot(sbs, features = c("ERSTRESS"), pt.size=0.4) & scale_color_gradientn(colours=spectral)
+FeaturePlot(sbs,  features = c("ADIPO"), pt.size=0.4) & scale_color_gradientn(colours=spectral)
+FeaturePlot(sbs,  features = c("ADIPO","ERSTRESS"), blend=T,cols=c("lightgrey","red","blue"), order=T, pt.size=0.4 ) 
+FeaturePlot(sbs,  features = c("ADIPO","UPR"), blend=T,cols=c("lightgrey","red","blue"), order=T, pt.size=0.4 ) 
+```
+
+
+###UPR vs Adipogenesis
+```{r upr_violin}
+Idents(sbs) = "fclusters"
+VlnPlot(sbs, features=c("UPR","ADIPO","ERSTRESS"), stack=T, flip=T, fill.by = "ident",  cols=clusters)
+```
+
+```{r upr_scatter}
+FeatureScatter(sbs, feature1 = "ADIPO", feature2 = "ERSTRESS", ncol=3, cols=clusters, shuffle=T, pt.size = 0.5) &
+  geom_hline(aes(yintercept=0.2))&
+  geom_vline(aes(xintercept=0.2))
+
+FeatureScatter(sbs, feature1 = "ADIPO", feature2 = "ERSTRESS",split.by = "seurat_clusters", ncol=4,  cols=clusters, pt.size = 0.2) &
+  geom_hline(aes(yintercept=0.2))&
+  geom_vline(aes(xintercept=0.2)) & geom_smooth(method="lm", se=F, colour="red", linetype="dashed", linewidth=0.5)
+
+FeatureScatter(sbs, feature1 = "ADIPO", feature2 = "ERSTRESS", split.by = "time", ncol=2, cols=clusters, shuffle = T, pt.size = 0.5) &
+  geom_hline(aes(yintercept=0.2))&
+  geom_vline(aes(xintercept=0.2))
+
+FeatureScatter(sbs, feature1 = "ADIPO", feature2 = "ERSTRESS", ncol=2, shuffle = T, pt.size = 0.5,
+               cells= colnames(sbs)[sbs$seurat_clusters %in%  c(5,6,8)], cols=clusters[c(6,7,9)]) &
+  geom_hline(aes(yintercept=0.2))&
+  geom_vline(aes(xintercept=0.2))
+
+FeatureScatter(sbs, feature1 = "ADIPO", feature2 = "ERSTRESS", ncol=2,  shuffle = T, pt.size = 0.5,
+               cells= colnames(sbs)[sbs$seurat_clusters %in%  c(6)], cols=clusters[7]) &
+  geom_hline(aes(yintercept=0.2))&
+  geom_vline(aes(xintercept=0.2)) & geom_smooth(method="lm", se=F, colour="red", linetype="dashed", linewidth=0.5)
+```
+
+
+## UPR arms
+
+```{r upr_3_arms}
+sbs = AddModuleScore(sbs, features = list(perk = some.molsig$gene[some.molsig$term == "GOBP_PERK_MEDIATED_UNFOLDED_PROTEIN_RESPONSE"],
+                                    atf6 = some.molsig$gene[some.molsig$term == "GOBP_ATF6_MEDIATED_UNFOLDED_PROTEIN_RESPONSE"],
+                                    ire1 = some.molsig$gene[some.molsig$term == "GOBP_IRE1_MEDIATED_UNFOLDED_PROTEIN_RESPONSE"]),
+               name="upr_pathways")
+colnames(sbs@meta.data)[grep("upr_pathways",colnames(sbs@meta.data))] = paste0("upr_", c("perk","atf6","ire1"))
+```
+
+```{r}
+VlnPlot(sbs, features=c("upr_perk","upr_atf6","upr_ire1"), stack=T, flip=T, fill.by = "ident",  cols=clusters)
+```
+
+```{r, dev=c('png')}
+filt = subset(sbs, downsample=100)
+
+DoHeatmap(filt, features= some.molsig$gene[some.molsig$term == "GOBP_PERK_MEDIATED_UNFOLDED_PROTEIN_RESPONSE"],
+          group.colors = clusters)
+
+DoHeatmap(filt, features= some.molsig$gene[some.molsig$term == "GOBP_ATF6_MEDIATED_UNFOLDED_PROTEIN_RESPONSE"],
+          group.colors = clusters)
+
+DoHeatmap(filt, features= some.molsig$gene[some.molsig$term == "GOBP_IRE1_MEDIATED_UNFOLDED_PROTEIN_RESPONSE"],
+          group.colors = clusters)
+```
+```{r}
+table(grep("ATF6",some.molsig$term, value=T))
+```
+
+## UPR marker genes
+###SLC3A2
+
+
+```{r scl3a2}
+FeaturePlot(sbs, features = "SLC3A2") & scale_color_gradientn(colours=spectral)
+VlnPlot(sbs, features = "SLC3A2", cols=clusters, pt.size = 0) + 
+    scale_x_discrete(limits =figure_order, labels=function(x){gsub("^","a",x)}, 
+                   name="Adipogenesis clusters")  + theme_hp
+```
+
+### HSPA5 aka BiP
+
+```{r hspa5}
+FeaturePlot(sbs, features = "HSPA5") & scale_color_gradientn(colours=spectral)
+VlnPlot(sbs, features = "HSPA5", cols=clusters, pt.size = 0)+ 
+    scale_x_discrete(limits =figure_order, labels=function(x){gsub("^","a",x)}, 
+                   name="Adipogenesis clusters")  + theme_hp
+```
+
+### XBP1
+
+```{r xbp1}
+FeaturePlot(sbs, features = "XBP1") & scale_color_gradientn(colours=spectral)
+VlnPlot(sbs, features = "XBP1", cols=clusters, pt.size = 0)+ 
+    scale_x_discrete(limits =figure_order, labels=function(x){gsub("^","a",x)}, 
+                   name="Adipogenesis clusters")  + theme_hp
+```
+
+## Adipogenesis marker genes
+### PPARG
+
+```{r pparg}
+FeaturePlot(sbs, features = "PPARG") & scale_color_gradientn(colours=spectral)
+VlnPlot(sbs, features = "PPARG", cols=clusters, pt.size = 0)+ 
+   scale_x_discrete(limits =figure_order, labels=function(x){gsub("^","a",x)}, 
+                   name="Adipogenesis clusters")  + theme_hp
+```
+
+### ADIPOQ
+
+```{r adipoq}
+FeaturePlot(sbs, features = "ADIPOQ") & scale_color_gradientn(colours=spectral)
+VlnPlot(sbs, features = "ADIPOQ", cols=clusters, pt.size = 0)+ 
+    scale_x_discrete(limits =figure_order, labels=function(x){gsub("^","a",x)}, 
+                   name="Adipogenesis clusters")  + theme_hp
+```
+
+
+### FABP4
+
+```{r fabp4}
+FeaturePlot(sbs, features = "FABP4") & scale_color_gradientn(colours=spectral)
+VlnPlot(sbs, features = "FABP4", cols=clusters, pt.size = 0)+ 
+    scale_x_discrete(limits =figure_order, labels=function(x){gsub("^","a",x)}, 
+                   name="Adipogenesis clusters")  + theme_hp
+```
+
+
+### LPL
+
+```{r lpl}
+FeaturePlot(sbs, features = "LPL") & scale_color_gradientn(colours=spectral)
+VlnPlot(sbs, features = "LPL", cols=clusters, pt.size = 0)+ 
+   scale_x_discrete(limits =figure_order, labels=function(x){gsub("^","a",x)}, 
+                   name="Adipogenesis clusters")  + theme_hp
+```
+
+### FASN
+
+```{r fasn}
+FeaturePlot(sbs, features = "LPL") & scale_color_gradientn(colours=spectral)
+VlnPlot(sbs, features = "LPL", cols=clusters, pt.size = 0)+ 
+    scale_x_discrete(limits =figure_order, labels=function(x){gsub("^","a",x)}, 
+                   name="Adipogenesis clusters")  + theme_hp
+```
+
+
+## Progenitor markers (for comparison)
+
+### CD36
+
+```{r cd36}
+FeaturePlot(sbs, features = "CD36") & scale_color_gradientn(colours=spectral)
+VlnPlot(sbs, features = "CD36", cols=clusters, pt.size = 0)+ 
+    scale_x_discrete(limits =figure_order, labels=function(x){gsub("^","a",x)}, 
+                   name="Adipogenesis clusters")  + theme_hp
+```
+
+
+### ACTA2
+
+```{r acta2}
+FeaturePlot(sbs, features = "ACTA2") & scale_color_gradientn(colours=spectral)
+VlnPlot(sbs, features = "ACTA2", cols=clusters, pt.size = 0)+ 
+  scale_x_discrete(limits =figure_order, labels=function(x){gsub("^","a",x)}, 
+                   name="Adipogenesis clusters")  + theme_hp
+```
+
+
+
+## SWAT markers
+
+### MGP
+
+```{r mgp}
+FeaturePlot(sbs, features = "MGP") & scale_color_gradientn(colours=spectral)
+VlnPlot(sbs, features = "MGP", cols=clusters, pt.size = 0)+ 
+  scale_x_discrete(limits =figure_order, labels=function(x){gsub("^","a",x)}, 
+                   name="Adipogenesis clusters")  + theme_hp
+```
+
+
+### DCN
+
+```{r dcn}
+FeaturePlot(sbs, features = "DCN") & scale_color_gradientn(colours=spectral)
+VlnPlot(sbs, features = "DCN", cols=clusters, pt.size = 0)+ 
+   scale_x_discrete(limits =figure_order, labels=function(x){gsub("^","a",x)}, 
+                   name="Adipogenesis clusters")  + theme_hp
+```
+
+
+
+
+
+
+
+

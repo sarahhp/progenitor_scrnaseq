@@ -1,0 +1,180 @@
+---
+title: "bulk_day15_GO"
+author: "Sarah Hazell Pickering"
+date: "2025-01-21"
+output: html_document
+---
+
+FYI: figure in paper was from running only cc and hallmark. runnning all gives the same result; but slightly different pvalue adjustment. Can fix I guess. 
+
+```{r}
+library(here); i_am("analysis/bulk_day15_mitopathways.Rmd")
+knitr::opts_knit$set(dev=c("png","pdf"))
+odir = here("output/bulk")
+```
+
+```{r message=FALSE, warning=FALSE, echo=TRUE}
+library(tidyr)
+library(dplyr)
+library(clusterProfiler)
+library(enrichplot)
+library(ggplot2)
+theme_set(theme_classic(base_size=15) + 
+  theme(axis.title.y=element_blank(),axis.text.y = element_text(size=12),
+        axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth=0.25)))
+
+library(stringr)
+library(viridis)
+pal = c("#DA1819", "#00AED1", "#434D51","#EBB400","#691A93","#3AAD00")
+```
+
+## GSEA setup
+```{r}
+go <- clusterProfiler::read.gmt("/projects/imb-pkbphil/sp/annotations/molsigdb/msigdb.v2024.1.Hs.symbols.gmt")
+molsig = go[gsub("_.*","", go$term) %in% c("GOCC","GOBP","GOMF","KEGG","HALLMARK","WP","REACTOME"),]
+
+head(molsig); nrow(molsig)
+molsig$term = factor(molsig$term)
+table(gsub("_.*","", molsig$term))
+rm(go)
+```
+```{r go_replace}
+phrases = c("protein_containing_complex" = "complex",
+    "structure_organization" = "structure",
+"transforming_growth_factor_beta"="TGFb",
+    "_(WITH|INCLUDES_BOTH)_BLOCH_AND_.*"=":_BLOCH_&_KANDut.", #simplify to Cholesterol metabolism... 
+      "_CELLULAR_" = "_CELL_", 
+      "response_to_topologically_incorrect_protein" = "topologically_incorrect_protein_response", #Synonym 
+     "_DRIVEN_ACTIVE_TRANSMEMBRANE"= "",#OXIDOREDUCTION...TRANSPORTER_ACTIVITY
+      "_AND_RESPIRATORY_ELECTRON_TRANSPORT" ="_&_electron_transport",#AEORBIC RESPIRATION...
+      "ENDOPLASMIC_RETICULUM"="ER",
+    "regulating_ANTI_OXIDANT"="&_ANTIOXIDANT",
+    "_ENZYMES$"="",
+    "the_citric_acid"="")
+#phrases
+
+recap <- c(
+    "rna" = "RNA",
+    "mrna" = "mRNA",
+    "rrna" = "rRNA",
+    "ncrna"="ncRNA",
+    "tnfa" = "TFNa",
+    "nfkb" = "NFKb",
+    "mtorc1" = "mTORC1",
+    "bmp" = "BMP",
+    "e2f" = "E2F",
+    "uv" = "UV",
+    "er"="ER",
+    "upr"="UPR",
+    "tca"="TCA",
+	"ecm"="ECM")
+#recap
+```
+
+
+Function to intelligently abbreviate GO terms and correct the capitalisation of initialisations based on the above lists.  To do: save these lists to file to make reproducible and concise.   
+
+```{r abrev_go}
+
+drama_shorten = function(ont) {
+  for (x in 1:length(phrases)){
+    ont = gsub( names(phrases)[x],phrases[x], ont, ignore.case = T)
+  }
+  a = abbreviate(gsub("_"," ", gsub("^[[:alpha:]]*_","",tolower(ont))),minlength=41, dot=T, named = F)
+  a = stringr::str_to_sentence(a)
+  for (i in 1:length(recap))
+    a = gsub(sprintf("\\b%s\\b", names(recap)[i]),recap[i],a, ignore.case = T)
+  return(a)
+}
+```
+
+## Load data
+```{r}
+sig = read.delim(file="https://raw.githubusercontent.com/sarahhp/splicing_thermogenesis/main/03limma/any_and_all_donor_DGE.tsv")
+head(sig)
+nrow(sig)
+tail(sig)
+
+summary(sig$all.donors.adj.P.Val < 0.01)
+```
+
+```{r}
+make_gene_list = function(sig, donor){
+  gl = sig[,paste0("logFC.",donor)]
+  names(gl) = sig$gene_name
+  gl = gl[order(gl, decreasing = T)]
+  return (gl)
+}
+
+
+allgl = list()
+for (donor in c("s1","s2","s3","s4","s5","s6")){
+  print(donor)
+  gl = make_gene_list(sig, donor)
+  allgl[[donor]] = gl
+}
+str(allgl)
+```
+
+## Run GSEA 
+
+```{r}
+allea = compareCluster(allgl, fun=GSEA, TERM2GENE=molsig, pvalueCutoff=1, minGSSize=3, eps=1e-40)
+allea = arrange(allea, p.adjust, abs(NES))
+head(allea)
+summary(allea@compareClusterResult$p.adjust)
+summary(allea@compareClusterResult$NES)
+nrow(allea)
+```
+
+
+Alpha matters here for the includeAll plots
+
+## Filter adj. pvalue
+```{r}
+filt = filter(allea, p.adjust < 0.01 & gsub("_.*","", ID) %in% c("GOCC","HALLMARK")) 
+```
+
+
+```{r}
+write.table(as.data.frame(allea), here(odir, "bulk_day15_GSEA.tsv"),
+            sep="\t", quote=F, row.names = F)
+```
+
+## Include all plots
+NES = Normalised enrichment score
+
+```{r go5, dev=c("png","pdf")}
+dotplot(filt, showCategory=6, includeAll=T, color="NES") + scale_colour_viridis(option="mako", direction=-1)
+dotplot(filt, showCategory=2, includeAll=T, color="NES") + scale_colour_viridis(option="mako", direction=-1)
+```
+
+
+```{r}
+top2 = filter(as_tibble(filt), NES > 0 & p.adjust < 1e-10 & ID != "GOCC_MITOCHONDRIAL_PROTEIN_CONTAINING_COMPLEX" ) %>% 
+  slice_min(tibble(p.adjust,plyr::desc(NES)), n=4, by=Cluster)
+w2 = filter(as_tibble(filt), NES < 0 & p.adjust < 1e-8) %>% slice_min(tibble(p.adjust,NES), n=4, by=Cluster)
+
+top2 = rbind(top2, w2) %>% mutate(condition=if_else(NES>0,"beige","white"))
+top2[,c(1:2,4:11)]
+top2$ID = factor(top2$ID, levels = unique(c(w2$ID, top2$ID)))
+```
+
+
+```{r}
+ggplot(top2,aes(x=Cluster, y=ID, color=condition, size=-log10(p.adjust))) + geom_point() +
+  scale_color_manual(values = c("orange","cyan3")) 
+```
+
+```{r day15_GSEA_top2pfilt, dev=c("png","pdf")}
+include_all_plot = filter(as_tibble(filt), Description %in% top2$Description & p.adjust < 0.05) %>%
+  mutate(condition=if_else(NES>0,"beige","white"))
+include_all_plot$ID = factor(include_all_plot$ID, levels=unique(top2$ID))
+
+ggplot(include_all_plot,aes(x=Cluster, y=ID, color=condition, alpha=abs(NES))) + geom_point(size=10) +
+  scale_color_manual(values = c("#FF7F00","#1F78B4")) + xlab("Subject") + 
+  scale_y_discrete(labels= function(ID) drama_shorten(ID)) 
+
+```
+

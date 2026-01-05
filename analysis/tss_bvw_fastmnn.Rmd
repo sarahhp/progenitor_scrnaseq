@@ -1,0 +1,406 @@
+---
+title: "tss_integration_fastmnn"
+author: "Sarah Hazell Pickering"
+date: "2024-04-11"
+output: html_document
+---
+
+1. Simplify object from integration trial to include only FASTMNN and save
+2. Find marker genes and GO terms for new FASTMNN clusters
+
+
+```{r params}
+module="adipogenesis"
+method_name="fastmnn"
+dataname = paste0("tss_bvw_",method_name)
+
+library(here); i_am(file.path("analysis",paste0(dataname,".Rmd")))
+
+indir = here("output", module, "tss_integration_trial")
+odir = here("output", module, dataname)
+if (!dir.exists(here(odir))){dir.create(here(odir), recursive = T)}
+
+load_data = T #loading data 
+subset_data = F
+```
+
+
+```{r libs, warning=F, message=F, echo=F}
+library(dplyr)
+library(ggplot2)
+library(ggsci)
+library(Seurat)
+library(BPCells)
+library(patchwork)
+library(clusterProfiler)
+library(enrichplot)
+library(RColorBrewer)
+```
+
+
+```{r}
+pal = c("#1F78B4", "#85C2EA","#B3B3B3", "#F18486","#E31A1C")
+clusters = ggsci::pal_simpsons()(13)[c(1:7,9:13)]
+ # tvthemes::gravityFalls_pal()(13)
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
+theme_hp = theme_classic(base_size=15) + 
+		  theme(axis.line = element_line(linewidth = 0.25),
+		        axis.ticks = element_line(linewidth=0.25),
+		        strip.background = element_blank(), # remove boxes around facet labels
+		        )
+		#set for all ggplots
+theme_set(theme_hp)
+knitr::opts_chunk$set(dev=c("png","pdf"))
+```
+
+```{r setup-variables-rpca}
+red_name = paste("pca", sep=".", method_name)
+umap_name = paste("umap", sep=".", method_name)
+clu_name = paste( method_name, sep="_", "clusters")
+tsne_name = paste("tsne", sep=".", method_name)
+```
+
+## Read data
+
+
+```{r load_data}
+if (subset_data){
+  sbs = readRDS(here(indir, "10%_complete_analysis.rds"))
+  Idents(sbs) = "seurat_clusters"
+} else {
+  sbs = readRDS(here(indir, "complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+table(Idents(sbs))
+head(sbs@meta.data)
+sbs
+```
+
+
+```{r format_data}
+sbs$seurat_clusters = sbs@meta.data[[clu_name]]
+Idents(sbs) = clu_name
+sbs[["umap"]] = sbs[[umap_name]]
+sbs[["tsne"]] = sbs[[tsne_name]]
+
+other_red = c("rpca","harmony")
+for (red in other_red){
+  sbs@meta.data[[paste( red, sep="_", "clusters")]] = NULL
+  sbs[[paste("pca", sep=".", red)]] = NULL
+  sbs[[paste("umap", sep=".", red)]] = NULL
+  sbs[[paste("tsne", sep=".", red)]] = NULL
+}
+sbs[["mnn.reconstructed"]] = NULL
+sbs = JoinLayers(sbs)
+sbs
+```
+
+
+```{r no_cells}
+ggplot(sbs@meta.data) + geom_bar(aes(x=sample, fill=sample)) + 
+  scale_fill_manual(values=pal) + scale_y_continuous(expand=c(0,0), name="Cells")
+```
+
+```{r}
+DimPlot(sbs, reduction = "tsne", group.by="initial_clusters", cols=  tvthemes::gravityFalls_pal()(13))
+```
+
+
+## Cluster composition
+
+```{r cluster_composition}
+composition = group_by(sbs@meta.data, sample,fastmnn_clusters, time, condition) %>%
+  dplyr::count(name="n_cells") %>%
+  arrange(desc(n_cells))
+head(composition)
+```
+
+
+```{r cluster_comp_plots}
+ggplot(composition) + geom_bar(stat="identity",aes(x=sample, y=n_cells, fill=fastmnn_clusters)) + 
+   scale_fill_manual(values=clusters, name="TSS RPCA\nclusters")+ scale_y_continuous(expand=c(0,0)) +
+  theme(axis.text.x=element_text(angle=15, hjust=1))
+ggplot(composition) + geom_bar(stat="identity",aes(x=sample, y=n_cells, fill=fastmnn_clusters), position = "fill") +
+  scale_fill_manual(values=clusters)+ scale_y_continuous(expand=c(0,0)) +
+  theme(axis.text.x=element_text(angle=15, hjust=1))
+ggplot(composition) + geom_bar(stat="identity",aes(fill=sample, y=n_cells, x=fastmnn_clusters)) +
+  scale_fill_manual(values=pal)+ scale_y_continuous(expand=c(0,0)) +
+  theme(axis.text.x=element_text(angle=15, hjust=1))
+ggplot(composition) + geom_bar(stat="identity",aes(fill=sample, y=n_cells, x=fastmnn_clusters), position = "fill") +
+   scale_fill_manual(values=pal) + scale_y_continuous(expand=c(0,0)) +
+  theme(axis.text.x=element_text(angle=15, hjust=1))
+```
+
+## UMAP
+
+```{r umap}
+DimPlot(sbs, reduction="umap", label=T, shuffle = T, cols=clusters)
+DimPlot(sbs, reduction="umap", split.by = "sample", ncol=3, shuffle = T, cols=clusters)
+DimPlot(sbs, group.by="sample", cols=pal, shuffle = T)
+```
+
+
+
+## t-SNE
+```{r tsne}
+DimPlot(sbs, reduction = "tsne",shuffle=T, cols=clusters)
+DimPlot(sbs, reduction="tsne", split.by = "sample", ncol=3, shuffle = T, cols=clusters)
+DimPlot(sbs, reduction = "tsne", group.by= "sample", shuffle = T, cols=pal)
+```
+
+
+## Find biomarkers
+Min.pct sets the minimum percentage of cells for a marker to be found in
+
+Does densify, which increases speed at the cost of memory help?  
+```{r densify}
+norm.markers = FindAllMarkers(sbs, only.pos = T, min.pct=0.25, 
+                              logfc.threshold = 0.5, densify=T)
+norm.markers = merge(norm.markers,
+                     sbs[["RNA"]][[c("simple_id","gene_name","proximity")]],
+                     by.x="gene", by.y="simple_id")
+norm.markers = arrange(norm.markers, p_val_adj, avg_log2FC)
+head(norm.markers); dim(norm.markers)
+
+
+top.markers = as.data.frame(norm.markers %>%
+    group_by(cluster) %>%
+    slice_max(n = 2, order_by = avg_log2FC))
+top.markers
+```
+### Dotplots
+
+```{r}
+time_per_cluster = group_by(composition, fastmnn_clusters, time) %>% summarise(n_cells = sum(n_cells)) %>% 
+  slice_max(n=1, order_by = n_cells) %>% select(fastmnn_clusters, time)
+time_per_cluster
+top.markers = merge(top.markers, time_per_cluster, by.x="cluster", by.y="fastmnn_clusters")
+head(top.markers)
+```
+
+ 
+ 
+```{r marker_expr}
+DotPlot(sbs, features=rev(unique(top.markers$gene)), group.by = "fastmnn_clusters") & 
+  scale_colour_gradientn(colours = spectral) & coord_flip()
+```
+
+
+```{r marker_dots}
+top.markers$gene = factor(top.markers$gene, levels=rev(unique(top.markers$gene)))
+overlap.to.plot = filter(top.markers, gene %in% top.markers$gene)
+overlap.to.plot$gene = factor(overlap.to.plot$gene, levels=levels(top.markers$gene))
+
+ggplot(overlap.to.plot, aes(y=gene, size=abs(avg_log2FC), color=cluster,
+                    x=cluster)) + 
+  geom_point(colour="black",aes(size = avg_log2FC*1.5)) + geom_point() +
+  scale_color_manual(values=clusters) + facet_grid(~time, scales="free_x", space="free_x")
+```
+
+```{r top_marker_genes, dev=c('png','pdf')}
+include_all_plot = filter(norm.markers, gene %in% overlap.to.plot$gene & p_val_adj< 0.01)
+include_all_plot$gene = factor(include_all_plot$gene, levels=levels(top.markers$gene))
+include_all_plot = merge(include_all_plot, time_per_cluster, by.x="cluster", by.y="fastmnn_clusters")
+a = ggplot(include_all_plot, aes(x=cluster, y=gene, colour=cluster, size=avg_log2FC)) + 
+  geom_point(colour="black",aes(size = avg_log2FC*1.5)) + geom_point() +scale_color_manual(values=clusters)
+a
+
+a + facet_grid(~time, scales="free_x", space="free_x")
+```
+
+###  TSNEs
+
+```{r marker_vis}
+to_plot = grep("ACTA2|ADIPOQ$|r1@FASN|DCN", value=T, Features(sbs))
+
+FeaturePlot(sbs, features =to_plot, reduction = "tsne") 
+
+for (i in 1:(length(top.markers$gene)/4)){
+  start = ((i-1)*4)+1; print(start)
+  end = i*4; print(end)
+  print(FeaturePlot(sbs, features =as.character(top.markers$gene[start:end], 
+                                                reduction = "tsne")))
+}
+
+FeaturePlot(sbs, features = c("percent.mt", "nCount_RNA","nFeature_RNA"), reduction = "tsne")
+FeaturePlot(sbs, features = c("PC_1","PC_2","PC_3","PC_4"), reduction = "tsne")
+```
+
+### heatmap
+
+```{r}
+norm.markers %>%
+    group_by(cluster) %>%
+    top_n(n = 5, wt = avg_log2FC) -> top10
+DoHeatmap(subset(sbs,downsample=100), features= top10$gene)
+```
+
+
+
+## Cluster GO
+
+```{r load_go}
+molsig <- clusterProfiler::read.gmt("/projects/imb-pkbphil/sp/annotations/molsigdb/msigdb.v2024.1.Hs.symbols.gmt")
+head(molsig); nrow(molsig)
+##Pick gene sets to look in bcos all is a lot
+prefixes = c("HALLMARK", "KEGG","REACTOME", "WP", "GOBP", "GOCC","GOMF")
+colnames(molsig) = c("term","gene")
+some.molsig = molsig[gsub("_.*","", molsig$term) %in% prefixes,]
+some.molsig$term = factor(some.molsig$term)
+table(gsub("_.*","", some.molsig$term))
+```
+
+```{r}
+norm.markers = rename(norm.markers, simple_id=gene) #switch column names
+norm.markers = rename(norm.markers, gene=gene_name)
+norm.markers$cluster = factor(norm.markers$cluster, levels =0:11)
+all.genes = sbs[["RNA"]][["gene_name"]]
+```
+
+
+```{r basic_go}
+go = compareCluster(gene~cluster, data=norm.markers, 
+                      fun="enricher", TERM2GENE = some.molsig, universe = all.genes)
+head(go)[,c(2,4:9)]
+```
+
+```{r go_replace}
+phrases= read.delim(here("data/gene_sets/abbreviations.txt"))
+recap= read.delim(here("data/gene_sets/capitalisations.txt"))
+```
+
+```{r abrev_go}
+drama_shorten = function(ont) {
+  for (x in 1:nrow(phrases)){
+    ont = gsub( phrases$phrase[x],phrases$abbreviation[x], ont, ignore.case = T)
+  }
+  a = abbreviate(gsub("_"," ", gsub("^[[:alpha:]]*_","",tolower(ont))),minlength=41, dot=T, named = F)
+  a = stringr::str_to_sentence(a)
+  for (i in 1:nrow(recap))
+    a = gsub(sprintf("\\b%s\\b", recap$lowercase[i]),recap$capital[i],a, ignore.case = T)
+  return(a)
+}
+```
+
+
+```{r default_go_plots}
+go = mutate(go, cluster = factor(cluster, levels=0:max(as.integer(cluster))))
+head(go)[,c(2,4:9)]
+
+p = dotplot(go, x="cluster", showCategory=2, includeAll=F) 
+p+ scale_y_discrete(labels=drama_shorten(levels(p$data$Description)))  + theme_hp
+```
+
+
+```{r set_up_go_plot}
+dfgo = as.data.frame(go)
+dfgo$short_desc= drama_shorten(dfgo$Description)
+dfgo = merge(dfgo, time_per_cluster,by.x="cluster", by.y="fastmnn_clusters")
+go_to_plot = filter(dfgo, p.adjust < 0.01) %>% group_by(Cluster) %>%
+              slice_min(n = 2, order_by = data.frame(p.adjust, pvalue))
+go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
+```
+
+
+```{r cluster_go, dev=c('png','pdf')}
+p= ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+   geom_point(colour="black",aes(size = Count+(Count*1.5))) + geom_point() +scale_color_manual(values=clusters)+ theme(axis.title.y = element_blank())
+p
+```
+
+```{r cluster_go_overlapping, dev=c('png','pdf')}
+include_all_plot = filter(dfgo, Description %in% go_to_plot$Description & p.adjust < 0.01)
+include_all_plot$short_desc = factor(include_all_plot$short_desc, levels=levels(go_to_plot$short_desc))
+#include_all_plot = merge(include_all_plot, time_per_cluster,by.x="cluster", by.y="seurat_clusters")
+a = ggplot(include_all_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point(colour="black",aes(size = Count*2)) + geom_point()+
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +scale_color_manual(values=clusters)
+a
+a + facet_grid(~time, scales="free_x", space = "free_x")
+```
+
+## Add Progenitor clusters 
+
+```{r}
+prog_cols = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00","#AC8AD0")
+pro_clusters = "output/progenitors/rpca"
+if (subset_data){
+  pro = readRDS(here(pro_clusters, "10%_complete_analysis.rds"))
+} else{
+  pro = readRDS(here(pro_clusters, "complete_analysis.rds"))
+}
+pro
+table(pro$rpca_clusters)
+head(pro$rpca_clusters)
+tail(pro$rpca_clusters)
+```
+
+
+```{r}
+pro_clusters = pro$rpca_clusters
+names(pro_clusters) = gsub("day0.subjectS6","asc.day0",names(pro_clusters))
+head(pro_clusters[rownames(sbs@meta.data)])
+sbs@meta.data$progen_clusters = pro_clusters[rownames(sbs@meta.data)]
+table(sbs$progen_clusters, useNA="ifany")
+```
+
+
+```{r}
+sbs$if_progen_cluster = paste0("t",sbs$initial_clusters)
+sbs$if_progen_cluster[!is.na(sbs$progen_clusters)] = paste0("p",sbs$progen_clusters[!is.na(sbs$progen_clusters)])
+un.pc = unique(sbs$if_progen_cluster)
+sbs$if_progen_cluster = factor(sbs$if_progen_cluster , 
+                               levels=un.pc[order(gsub("[[:digit:]]*$","",un.pc),
+                                                  as.integer(gsub("p|t","", un.pc)))] )
+table(sbs$if_progen_cluster, useNA="ifany")
+```
+
+```{r}
+sbs$time.progen_clusters = sbs$time
+sbs$time.progen_clusters[!is.na(sbs$progen_clusters)] = paste0("p",sbs$progen_clusters[!is.na(sbs$progen_clusters)])
+sbs$time.progen_clusters = factor(sbs$time.progen_clusters,
+                                  levels=c(paste0("p",0:7), "day0","day1","day3")) #approx pseuodtime ordering
+table(sbs$time.progen_clusters)
+rm(pro)
+```
+
+### Progen plots
+
+```{r}
+DimPlot(sbs, reduction="umap", group.by= "time.progen_clusters", label=F, shuffle = T, 
+        cols=c(prog_cols,pal[c(3,2,1)]))
+DimPlot(sbs, reduction="umap", group.by= "time.progen_clusters", label=F, shuffle = T, 
+        cols=c(prog_cols,pal[c(3,2,1)]), split.by = "time", ncol = 2)
+DimPlot(sbs, reduction="umap", group.by= "time.progen_clusters", label=F, shuffle = T, 
+        cols=c(prog_cols,pal[c(3,2,1)]), split.by = "time.progen_clusters", ncol = 3)
+```
+```{r prog_tsne}
+DimPlot(sbs, reduction="tsne", group.by= "time.progen_clusters", label=F, shuffle = T, 
+        cols=c(prog_cols,pal[c(3,2,1)]))
+DimPlot(sbs, reduction="tsne", group.by= "time.progen_clusters", label=F, shuffle = T, 
+        cols=c(prog_cols,pal[c(3,2,1)]), split.by = "time", ncol = 2)
+DimPlot(sbs, reduction="tsne", group.by= "time.progen_clusters", label=F, shuffle = T, 
+        cols=c(prog_cols,pal[c(3,2,1)]), split.by = "time.progen_clusters", ncol = 3)
+```
+
+
+## Save
+
+```{r save}
+if (subset_data == F){
+  saveRDS(sbs, file = here(odir, "complete_analysis.rds"))
+   write.table(composition, here(odir, "cluster_composition.tsv"),
+            sep="\t", row.names = F, quote=F)
+  write.table(norm.markers, here(odir, "marker_genes.txt"),
+            sep="\t", row.names = F)
+  write.table(go, here(odir, "ORA_marker_genes.txt"),
+            sep="\t", row.names = F)
+  Idents(sbs) = "sample"
+  dwns = subset(sbs, downsample=1000)
+  saveRDS(dwns, file = here(odir, "10%_complete_analysis.rds"))
+} else if (subset_data){
+  saveRDS(sbs, file = here(odir, "10%_subset_analysis.rds"))
+}
+```
+
+
