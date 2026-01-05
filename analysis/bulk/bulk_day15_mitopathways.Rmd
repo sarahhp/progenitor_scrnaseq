@@ -6,10 +6,11 @@ output: html_document
 ---
 
 ```{r}
-library(here); i_am("analysis/bulk/bulk_day15_mitopathways.Rmd")
+dataname = "bulk_day15"
+library(here); i_am(sprintf("analysis/%s_mitopathways.Rmd", dataname))
 knitr::opts_knit$set(dev=c("png","pdf"))
 odir = here("output/bulk")
-figdir = here(odir,"plots")
+figdir =here("docs","figure",sprintf("%s_mitopathways.Rmd",dataname))
 if (!dir.exists(figdir)){dir.create(figdir, recursive = T)}
 ```
 
@@ -21,6 +22,20 @@ library(enrichplot)
 library(ggplot2)
 library(stringr)
 library(viridis)
+library(ggpubr)
+library(edgeR)
+```
+
+
+
+```{r}
+theme_hp = theme_classic(base_size=15) + 
+		  theme(axis.line = element_line(linewidth = 0.25),
+		        axis.ticks = element_line(linewidth=0.25),
+		        strip.background = element_blank(), # remove boxes around facet labels
+		        )
+		#set for all ggplots
+theme_set(theme_hp)
 ```
 
 
@@ -91,25 +106,27 @@ write.table(as.data.frame(allea), here(odir, "mitopathways_GSEA.tsv"),
 ```
 
 
-Alpha matters here for the includeAll plots
 
-## Alpha 0.01
+
+## GSEA plots 
+
+IncludeAll, not just the highest ranked terms. 
 ```{r}
 filt = filter(allea, p.adjust < 0.01) %>% arrange(p.adjust)
+top3_gsea = slice_min(as_tibble(filt), p.adjust, n=3, by = Cluster)
 ```
 
 NES = Normalised enrichment score
 
-```{r}
+```{r MitoPathways_GSEA_top3filt, dev = c("png","pdf")}
 dotplot(filt, showCategory=5, includeAll=T)
 dotplot(filt, showCategory=5, includeAll=F)
 dotplot(filt, showCategory=3, includeAll=T, color="NES") + 
   #scale_colour_gradientn(colours = c("beige", "#FF7F00")) 
-  scale_colour_distiller(palette="Oranges", direction=1) + theme_classic(base_size=15) + 
+  scale_colour_distiller(palette="Oranges", direction=1) + 
   theme(axis.title.y=element_blank(),axis.text.y = element_text(size=12),
         axis.line = element_line(linewidth = 0.25),
         axis.ticks = element_line(linewidth=0.25)) + xlab("Subject")
-ggsave(here(figdir,"MitoPathways_GSEA_top3filt.pdf"))
 ```
 
 ## logFC heatmaps
@@ -146,7 +163,7 @@ Heatmap(t(data.matrix(oxphos_logfc)), column_split = gsub(" subunits" ,"",oxphos
 ```
 
 Differentially expressed only
-```{r}
+```{r dev = c("png","pdf")}
 all.donor.sig = filter(sig, all.donors.adj.P.Val < 0.01) 
 oxphos_logfc = oxphos_logfc[rownames(oxphos_logfc) %in% all.donor.sig$gene_name,]
 nrow(oxphos_logfc)
@@ -203,6 +220,146 @@ h
 
 ```
 
+## Test significance of GSEA differences
 
-### Average expression plots?  
-average logFC across genes is a bit tricky, trends towards zero... but easier to show than two expression values.  Though really it makes sense to average fpkm then calculate logFC
+### Get logFC for each replicate
+```{r}
+head(sig)
+arrange(sig, desc(logFC.s2)) %>% select(gene_name, contains("logFC"))
+```
+
+```{r}
+#load preproceesed object called filt
+load(url("https://github.com/sarahhp/splicing_thermogenesis/raw/refs/heads/main/03limma/DGElist_ob_limma_filt.RData"))
+```
+
+```{r}
+make_rep_gene_list = function(filt, donor, rep, ps=0.5){
+  expr = rpkm(filt, normalized.lib.sizes = T)
+  w = expr[,filt$samples$donor == donor & filt$samples$rep == rep & filt$samples$condition == "white"]
+  b = expr[,filt$samples$donor == donor & filt$samples$rep == rep & filt$samples$condition == "beige"]
+  gl = log2((b+ps)/(w+ps))
+  names(gl) = filt$genes$gene_name
+  gl = gl[order(gl, decreasing = T)]
+  return (gl)
+}
+head(make_rep_gene_list(filt, "subject2", "3",ps=0.5))
+
+allgl = list()
+for (donor in c("s1","s2","s3","s4","s5","s6")){
+  for (rep in 1:3){
+    gl = make_rep_gene_list(filt, gsub("s","subject",donor), rep)
+    allgl[[paste(donor, rep, sep="_")]] = gl
+  }
+#print(donor)
+}
+str(allgl)
+```
+
+### GSEA per replicate
+
+Differentiation replicates give an estimate of the variation in enrichment scores per subject. 
+```{r}
+repea = compareCluster(allgl, fun=GSEA, TERM2GENE=milong_simp, pvalueCutoff=1, minGSSize=3, eps=1e-20)
+repea = arrange(repea, p.adjust)
+head(repea, n=15)
+summary(repea@compareClusterResult$p.adjust)
+summary(repea@compareClusterResult$NES)
+nrow(repea)
+```
+
+
+```{r}
+dfrep = as.data.frame(repea) %>% mutate(subject = gsub("_.*","", Cluster), rep = gsub(".*_","", Cluster)) %>%
+  filter(ID %in% top3_gsea$ID)
+head(dfrep)
+```
+
+## Pairwise t-tests
+This is necessary for seeing differences when 2 or more subjects have a similar pattern of enrichment; in the limma test below I set up an s v mean(s) which enriches for unique NES between subjects.  This satisifies me that there are differences in pathway enrichment between donors, in particular between oxphos components, creatine metabolism and BCAA metabolism.  
+```{r}
+enrich= compare_means(enrichmentScore ~ subject, method="t.test", data=dfrep, group="ID", p.adjust.method = "fdr") %>%
+  arrange(p.adj)
+enrich 
+```
+
+
+```{r}
+summary(aov(NES~subject+ID, data=dfrep))
+t.test(filter(dfrep, ID== "CV subunits" & subject == "s2") %>% pull(NES),
+filter(dfrep, ID== "CV subunits" & subject != "s2") %>% pull(NES))
+
+t.test(filter(dfrep, ID== "CV subunits" & subject == "s2") %>% pull(NES),
+filter(dfrep, ID== "CV subunits" & subject == "s6") %>% pull(NES))
+
+t.test(filter(dfrep, ID== "CV subunits" & subject == "s2") %>% pull(NES),
+filter(dfrep, ID== "CV subunits" & subject == "s4") %>% pull(NES))
+
+filter(dfrep, ID== "CV subunits")
+```
+
+
+
+```{r}
+ggplot(filter(dfrep, ID== "CV subunits"), aes(x=subject, y=NES)) + geom_boxplot()
+ggplot(filter(dfrep, ID== "CI subunits"), aes(x=subject, y=NES)) + geom_boxplot()
+ggplot(filter(dfrep, ID== "Creatine metabolism"), aes(x=subject, y=NES)) + geom_boxplot()
+ggplot(filter(dfrep, ID== "CIII subunits"), aes(x=subject, y=NES)) + geom_boxplot()
+ggplot(filter(dfrep, ID== "Fatty acid oxidation"), aes(x=subject, y=NES)) + geom_boxplot()
+ggplot(filter(dfrep, ID== "Branched-chain amino acid metabolism"), aes(x=subject, y=NES)) + geom_boxplot()
+ggplot(filter(dfrep, ID== "Mitochondrial ribosome"), aes(x=subject, y=NES)) + geom_boxplot()
+```
+
+```{r}
+head(dfrep)
+```
+
+## Limma test
+
+```{r}
+enrichmat = filter(as_tibble(repea), p.adjust < 0.05) %>% pivot_wider(names_from = Cluster, values_from = NES, id_cols=ID, values_fill = 0) %>% as.data.frame()
+rownames(enrichmat) = enrichmat$ID
+enrichmat = data.matrix(enrichmat[2:ncol(enrichmat)])
+head(enrichmat)
+
+sets =  repea@compareClusterResult[c("ID","setSize")] %>% distinct() %>% as.data.frame()
+rownames(sets) = sets$ID
+sets = sets[rownames(enrichmat),]
+head(sets)
+
+samples = select(dfrep, Cluster, subject, rep) %>% distinct()
+rownames(samples) = samples$Cluster
+samples$subject = factor(samples$subject)
+samples
+design = model.matrix(~0+subject, data = samples)
+colnames(design) = levels(samples$subject)
+design
+```
+
+
+```{r}
+fit = lmFit(enrichmat, design)
+explong = makeContrasts(s1 = s1 - (s2 + s3 + s4 + s5 + s6)/5 ,
+                        s2 = s2 - (s1 + s3 + s4 + s5 + s6)/5 ,
+                        s3 = s3 - (s1 + s2 + s4 + s5 + s6)/5 ,
+                        s4 = s4 - (s1 + s2 + s3 + s5 + s6)/5 ,
+                        s5 = s5 - (s1 + s2 + s3 + s4 + s6)/5 ,
+                        s6 = s6 - (s1 + s2 + s3 + s4 + s5)/5 ,
+                         levels = design)
+
+next_fit = contrasts.fit(fit, explong)
+#Becomes a weighted contrast table
+next_fit$contrasts
+plot(sets$setSize, fit$sigma)
+fit = eBayes(next_fit, robust=T,  trend=sets$setSize)
+results = decideTests(fit, p.value = 0.05)
+summary(results)
+```
+
+
+
+```{r}
+as.data.frame(results)
+results[unique(top3_gsea$ID),]
+```
+
