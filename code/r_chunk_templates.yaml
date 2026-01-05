@@ -1,0 +1,58 @@
+
+global:
+  - name: "load_libs"
+    type: "dynamic"
+    chunk_options: "message=FALSE, warning=FALSE"
+
+params_block:
+  type: "parameterized"
+  content: |
+    ```{r params}
+    module = "{module}"
+    dataname = "{dataname}"
+    load_data = {load_data}
+    subset_data = {subset_data}
+    {optional_params}
+    ```
+
+setup_block:
+  type: "parameterized"
+  content: |
+    ```{r setup}
+    set.seed({seed})
+    rmd_filename = "{rmd_filename}"
+    fig_dir = file.path("analysis", module, dataname, "figures", rmd_filename)
+    if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+    knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                          dev = c("png","pdf"))
+    ```
+
+themes_block:
+  type: "parameterized"
+  content: |
+    ```{r themes}
+    theme_hp = theme_classic(base_size = 15) +
+      theme(axis.line = element_line(linewidth = 0.25),
+            axis.ticks = element_line(linewidth = 0.25),
+            strip.background = element_blank())
+    theme_set(theme_hp)
+    pal = {pal}
+    clusters = {clusters}
+    ```
+
+categories:
+  bulk:
+    pal: 'c("#DA1819", "#00AED1", "#434D51", "#EBB400", "#691A93", "#3AAD00")'
+    clusters: 'ggsci::pal_simpsons()(12)[c(1:7, 9:15)]'
+  progenitors:
+    pal: 'c("#1B9E77", "#D95F02", "#7570B3", "#E7298A", "#66A61E", "#E6AB02")'
+    clusters: 'ggsci::pal_simpsons()(12)[c(1:7, 9:15)]'
+  adipogenesis:
+    pal: 'c("#B3B3B3", "#A0D86F", "#1F78B4")'
+    clusters: 'ggsci::pal_simpsons()(12)[c(1:7, 9:15)]'
+  beige_vs_white:
+    pal: 'c("#1F78B4", "#85C2EA", "#B3B3B3", "#F18486", "#E31A1C")'
+    clusters: 'tvthemes::gravityFalls_pal()(13)'
+  tss:
+    pal: 'c("#1F78B4", "#85C2EA", "#B3B3B3", "#F18486", "#E31A1C")'
+    clusters: 'tvthemes::gravityFalls_pal()(13)'

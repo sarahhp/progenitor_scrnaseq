@@ -5,7 +5,7 @@ date: "2025-01-21"
 output: html_document
 ---
 
-FYI: figure in paper was from running only cc and hallmark. runnning all gives the same result; but slightly different pvalue adjustment. Can fix I guess. 
+FYI: figure in paper was from running only cc and hallmark. runnning all gives the same result; but slightly different pvalue adjustment.
 
 ```{r}
 library(here); i_am("analysis/bulk_day15_mitopathways.Rmd")
