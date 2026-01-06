@@ -5,39 +5,56 @@ date: "2025-07-01"
 output: html_document
 ---
 
-Preprocessing as in: https://github.com/sarahhp/splicing_thermogenesis/blob/main/R/01_six_donor_DGE_limma.Rmd
-
-```{r}
-library(here); i_am("analysis/bulk_day15_mitopathways.Rmd")
-knitr::opts_knit$set(dev=c("png","pdf"))
-odir = here("output/bulk")
-```
-
-```{r message=FALSE, warning=FALSE, echo=TRUE}
-library(tidyr)
-library(readr)
-library(dplyr)
-library(edgeR)
-library(limma)
+```{r libs, message=FALSE, warning=FALSE}
 library(RUVSeq)
 library(clusterProfiler)
+library(dplyr)
+library(edgeR)
 library(enrichplot)
 library(ggplot2)
+library(here)
+library(limma)
+library(readr)
 library(stringr)
+library(tidyr)
 library(viridis)
+```
+
+```{r params}
+module = "bulk"
+dataname = "day15"
+load_data = T
+subset_data = F
+```
+
+
+```{r setup}
+set.seed(8)
+rmd_filename = "bulk_day15_beige_DGE_between_subjects"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+odir = here("output/bulk")
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
 ```
 
 
 ```{r themes}
-theme_set(theme_classic(base_size=15) + 
-  theme(axis.title.y=element_blank(),axis.text.y = element_text(size=12),
-        axis.line = element_line(linewidth = 0.25),
-        axis.ticks = element_line(linewidth=0.25)))
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
 bvw= c("#FF7F00","#1F78B4")
 pal = c( "#00AED1","#DA1819", "#434D51","#3AAD00","#691A93","#EBB400")
 ```
 
 
+Preprocessing as in: https://github.com/sarahhp/splicing_thermogenesis/blob/main/R/01_six_donor_DGE_limma.Rmd
+## Load data
 ```{r}
 #load preproceesed object called filt
 load(url("https://github.com/sarahhp/splicing_thermogenesis/raw/refs/heads/main/03limma/DGElist_ob_limma_filt.RData"))
@@ -47,8 +64,6 @@ load(url("https://github.com/sarahhp/splicing_thermogenesis/raw/refs/heads/main/
 filt$samples$name
 filt$counts [filt$genes$Geneid == "ENSG00000109424",]
 ```
-
-
 ### voom normlisation
 
 ```{r}

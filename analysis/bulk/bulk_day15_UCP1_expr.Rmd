@@ -5,29 +5,44 @@ date: "2025-01-21"
 output: html_document
 ---
 
-```{r}
-library(here); i_am("analysis/bulk_day15_UCP1_expr.Rmd")
-figdir = here("output/bulk/plots")
-if (!dir.exists(figdir)){dir.create(figdir, recursive = T)}
-knitr::opts_knit$set(dev=c("png","pdf"))
+```{r libs, message=FALSE, warning=FALSE}
+library(dplyr)
+library(ggbeeswarm)
+library(ggplot2)
+library(ggprism)
+library(here)
+library(stringr)
+library(tidyr)
+library(viridis)
 ```
 
-```{r message=FALSE, warning=FALSE, echo=TRUE}
-library(tidyr)
-library(dplyr)
-library(ggplot2)
-theme_hp = theme_classic(base_size=15) + 
-		  theme(axis.line = element_line(linewidth = 0.25),
-		        axis.ticks = element_line(linewidth=0.25),
-		        strip.background = element_blank(), # remove boxes around facet labels
-		        )
-		#set for all ggplots
+```{r params}
+module = "bulk"
+dataname = "day15"
+load_data = T
+subset_data = F
+
+```
+
+
+```{r setup}
+set.seed(8)
+rmd_filename = "bulk_day15_UCP1_expr"
+i_am(file.path("analysis","bulk",paste0(rmd_filename,".Rmd")))
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
 theme_set(theme_hp)
-library(stringr)
-library(viridis)
-library(ggbeeswarm)
-library(ggprism)
-pal = c("#DA1819", "#00AED1", "#434D51","#EBB400","#691A93","#3AAD00")
+pal = c("#DA1819", "#00AED1", "#434D51", "#EBB400", "#691A93", "#3AAD00")
 ```
 
 
@@ -125,7 +140,7 @@ plot_genes = function(expr, sig_df, genes){
         scale_y_continuous(expand =expansion(mult=c(0,0.05))) + 
         labs(y="Gene expression (FPKM)",x="Subject") 
     print(g)
-    ggsave(here(figdir, paste0(paste0(genes,collapse="."),"_RNA_expr.pdf")))
+    ggsave(here(fig_dir, paste0(paste0(genes,collapse="."),"_RNA_expr.pdf")))
 }
 
 
@@ -135,17 +150,14 @@ plot_genes(long, sig, genes)
 
 genes = c("FASN","ACLY","LPL","PDK4")
 genes = c("FASN","PM20D1","CKMT1B","CD36")
-
 plot_genes(long, sig, genes)
 
 ```
 
-
-
 ### Add between subject pval
 
 ```{r}
-genes = c("UCP1","CIDEA","CITED1","PDK4")
+genes = c("UCP1","CIDEA","CITED1","PM20D1")
 to_plot = filter(long, gene_name %in% genes)
 pvals = get_pvals(sig, genes, long)
 pvals
@@ -173,9 +185,7 @@ g = ggplot( to_plot,
     add_pvalue(subject_p, x="subject",label="adj.p.star", label.size = 3, y.position = )
 
 print(g)
-ggsave(here(figdir, paste0(paste0(genes,collapse="."),"_RNA_expr_two_stats.pdf")))
-
-
+ggsave(here(fig_dir, paste0(paste0(genes,collapse="."),"_RNA_expr_two_stats.pdf")))
 ```
 
 
@@ -205,7 +215,7 @@ genes = c("UCP1","CIDEA","CITED1","ALPL")
     scale_y_continuous(expand =expansion(mult=c(0,0.05))) + 
     labs(y="Gene expression (FPKM)",x="Subject") 
   print(g)
-ggsave(here(figdir, paste0(paste0(genes,collapse="."),"_RNA_expr.pdf")))
+ggsave(here(fig_dir, paste0(paste0(genes,collapse="."),"_RNA_expr.pdf")))
 
 ```
 
@@ -217,7 +227,7 @@ ggplot(filter(long, gene_name == "UCP1"),
     geom_beeswarm(dodge.width=0.9, cex=1.5) + 
     scale_fill_manual(values = c("#1F78B4","#FF7F00")) + 
   scale_y_continuous(expand =expansion(mult=c(0,0.05)), name = "Gene expression (FPKM)")
-ggsave(here(figdir, "UCP1_RNA_expr.pdf"))
+ggsave(here(fig_dir, "UCP1_RNA_expr.pdf"))
 ```
 
 

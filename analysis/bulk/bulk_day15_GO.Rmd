@@ -5,29 +5,51 @@ date: "2025-01-21"
 output: html_document
 ---
 
-FYI: figure in paper was from running only cc and hallmark. runnning all gives the same result; but slightly different pvalue adjustment.
-
-```{r}
-library(here); i_am("analysis/bulk_day15_mitopathways.Rmd")
-knitr::opts_knit$set(dev=c("png","pdf"))
-odir = here("output/bulk")
-```
-
-```{r message=FALSE, warning=FALSE, echo=TRUE}
-library(tidyr)
-library(dplyr)
+```{r libs, message=FALSE, warning=FALSE}
 library(clusterProfiler)
+library(dplyr)
 library(enrichplot)
 library(ggplot2)
-theme_set(theme_classic(base_size=15) + 
-  theme(axis.title.y=element_blank(),axis.text.y = element_text(size=12),
-        axis.line = element_line(linewidth = 0.25),
-        axis.ticks = element_line(linewidth=0.25)))
-
+library(here)
 library(stringr)
+library(tidyr)
 library(viridis)
-pal = c("#DA1819", "#00AED1", "#434D51","#EBB400","#691A93","#3AAD00")
 ```
+
+```{r params}
+module = "bulk"
+dataname = "day15"
+load_data = T
+subset_data = F
+```
+
+
+```{r setup}
+set.seed(8)
+rmd_filename = "bulk_day15_GO"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+odir = "output/bulk"
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)                      
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#DA1819", "#00AED1", "#434D51", "#EBB400", "#691A93", "#3AAD00")
+clusters = ggsci::pal_simpsons()(12)[c(1:7, 9:15)]
+```
+
+
+FYI: figure in paper was from running only cc and hallmark. runnning all gives the same result; but slightly different pvalue adjustment.
 
 ## GSEA setup
 ```{r}
@@ -39,41 +61,12 @@ molsig$term = factor(molsig$term)
 table(gsub("_.*","", molsig$term))
 rm(go)
 ```
-```{r go_replace}
-phrases = c("protein_containing_complex" = "complex",
-    "structure_organization" = "structure",
-"transforming_growth_factor_beta"="TGFb",
-    "_(WITH|INCLUDES_BOTH)_BLOCH_AND_.*"=":_BLOCH_&_KANDut.", #simplify to Cholesterol metabolism... 
-      "_CELLULAR_" = "_CELL_", 
-      "response_to_topologically_incorrect_protein" = "topologically_incorrect_protein_response", #Synonym 
-     "_DRIVEN_ACTIVE_TRANSMEMBRANE"= "",#OXIDOREDUCTION...TRANSPORTER_ACTIVITY
-      "_AND_RESPIRATORY_ELECTRON_TRANSPORT" ="_&_electron_transport",#AEORBIC RESPIRATION...
-      "ENDOPLASMIC_RETICULUM"="ER",
-    "regulating_ANTI_OXIDANT"="&_ANTIOXIDANT",
-    "_ENZYMES$"="",
-    "the_citric_acid"="")
-#phrases
 
-recap <- c(
-    "rna" = "RNA",
-    "mrna" = "mRNA",
-    "rrna" = "rRNA",
-    "ncrna"="ncRNA",
-    "tnfa" = "TFNa",
-    "nfkb" = "NFKb",
-    "mtorc1" = "mTORC1",
-    "bmp" = "BMP",
-    "e2f" = "E2F",
-    "uv" = "UV",
-    "er"="ER",
-    "upr"="UPR",
-    "tca"="TCA",
-	"ecm"="ECM")
-#recap
+```{r go_replace}
+phrases= read.delim(here("data/gene_sets/abbreviations.txt"))
+recap= read.delim(here("data/gene_sets/capitalisations.txt"))
 ```
 
-
-Function to intelligently abbreviate GO terms and correct the capitalisation of initialisations based on the above lists.  To do: save these lists to file to make reproducible and concise.   
 
 ```{r abrev_go}
 

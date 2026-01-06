@@ -5,37 +5,52 @@ date: "2024-09-16"
 output: html_document
 ---
 
-```{r}
-dataname = "bulk_day15"
-library(here); i_am(sprintf("analysis/%s_mitopathways.Rmd", dataname))
-knitr::opts_knit$set(dev=c("png","pdf"))
-odir = here("output/bulk")
-figdir =here("docs","figure",sprintf("%s_mitopathways.Rmd",dataname))
-if (!dir.exists(figdir)){dir.create(figdir, recursive = T)}
-```
-
-```{r message=FALSE, warning=FALSE, echo=TRUE}
-library(tidyr)
-library(dplyr)
+```{r libs, message=FALSE, warning=FALSE}
+library(ComplexHeatmap)
+library(circlize)
 library(clusterProfiler)
+library(dplyr)
+library(edgeR)
 library(enrichplot)
 library(ggplot2)
-library(stringr)
-library(viridis)
 library(ggpubr)
-library(edgeR)
+library(here)
+library(stringr)
+library(tidyr)
+library(viridis)
+```
+
+```{r params}
+rmd_filename = "bulk_day15_mitopathways"
+module = "bulk"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+dataname = "day15"
+load_data = T
+subset_data = F
+odir = here('output',module, dataname)
+
 ```
 
 
+```{r setup}
+set.seed(8)
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
 
-```{r}
-theme_hp = theme_classic(base_size=15) + 
-		  theme(axis.line = element_line(linewidth = 0.25),
-		        axis.ticks = element_line(linewidth=0.25),
-		        strip.background = element_blank(), # remove boxes around facet labels
-		        )
-		#set for all ggplots
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
 theme_set(theme_hp)
+pal = c("#DA1819", "#00AED1", "#434D51", "#EBB400", "#691A93", "#3AAD00")
+clusters = ggsci::pal_simpsons()(12)[c(1:7, 9:15)]
 ```
 
 
@@ -143,13 +158,12 @@ logfc[1:6,1:6]
 
 ```{r}
 oxphos_subunits = milong[grep("C.* subunits", milong$hierarchy),]
-library(ComplexHeatmap)
 oxphos_subunits = oxphos_subunits[oxphos_subunits$gene %in% rownames(logfc),]#expr only
 head(oxphos_subunits)
 table(oxphos_subunits$term)
 
 oxphos_logfc = logfc[oxphos_subunits$gene,]
-oxphos_logfc
+oxphos_logfc[1:10,1:6]
 ```
 
 
@@ -167,7 +181,7 @@ Differentially expressed only
 all.donor.sig = filter(sig, all.donors.adj.P.Val < 0.01) 
 oxphos_logfc = oxphos_logfc[rownames(oxphos_logfc) %in% all.donor.sig$gene_name,]
 nrow(oxphos_logfc)
-pdf(here(figdir, "OXPHOS_complexes_heatmap.pdf"), height=4)
+pdf(here(fig_dir, "OXPHOS_complexes_heatmap.pdf"), height=4)
 h= Heatmap(t(data.matrix(oxphos_logfc)), name="logfc",col=col_fun,
         column_split = gsub(" subunits" ,"",oxphos_subunits$term[oxphos_subunits$gene %in% all.donor.sig$gene_name]),
         column_names_gp = gpar(fontsize = 6)
@@ -208,7 +222,7 @@ noncan_labels = gsub("\\.(1|2)","",rownames(noncan_logfc))
 dups = noncan_labels[duplicated(noncan_labels)]
 noncan_labels[noncan_labels %in% dups] = paste0( "'",dups)
 
-pdf(here(figdir,"NonCanonicalTherm_heatmap.pdf"), height=4)
+pdf(here(fig_dir,"NonCanonicalTherm_heatmap.pdf"), height=4)
 h = Heatmap(t(data.matrix(noncan_logfc)), name="logfc", col=col_fun,
         column_split =  gsub("chain","chain\n",c(noncan$term, rep("Creatine", length(creatine_pathway)))),
         column_title_rot = 15, column_title_gp = gpar(fontsize = 12),
@@ -223,10 +237,6 @@ h
 ## Test significance of GSEA differences
 
 ### Get logFC for each replicate
-```{r}
-head(sig)
-arrange(sig, desc(logFC.s2)) %>% select(gene_name, contains("logFC"))
-```
 
 ```{r}
 #load preproceesed object called filt
