@@ -61,7 +61,7 @@ def extract_libraries(rmd_path):
     return sorted(libs)
 
 def extract_palettes(rmd_path):
-    pal, clusters = None, None
+    pal, clusters,spectral = None, None, False
     with open(rmd_path, "r", encoding="utf-8") as f:
         for line in f:
             s = line.strip()
@@ -69,7 +69,9 @@ def extract_palettes(rmd_path):
                 pal = s.split("=", 1)[1].strip()
             if s.startswith("clusters=") or s.startswith("clusters ="):
                 clusters = s.split("=", 1)[1].strip()
-    return pal, clusters
+            if s.startswith("spectral=") or s.startswith("spectral ="):
+                spectral = True
+    return pal, clusters, spectral
 
 def extract_params_chunk(rmd_path):
     """Return dict of key=value from {r params} chunk; values are raw strings without quotes."""
@@ -81,19 +83,22 @@ def extract_params_chunk(rmd_path):
             if s.startswith("```{r") and "params" in s:
                 in_params = True
                 continue
+            if s.startswith("module=") or s.startswith("module ="):
+                in_params = True
             if in_params:
                 if s.startswith("```"):
                     break
-                if "=" in s and not s.startswith("#"):
+                if "=" in s and not s.startswith("#") and not "{" in s:
                     key, val = s.split("=", 1)
                     key = key.strip()
-                    val = val.strip().replace('"', '').replace("'", "")
+                    val = val.strip().replace('"', '\"').replace("'", "\'")
                     meta[key] = val
             else:
                 #Fallback to filename hint
                 fi = rmd_path.split("_")
                 meta["module"] = fi[0]
                 meta["dataname"] = fi[1]
+    print("Extracted params {}".format(meta))
     return meta
 
 def detect_module(rmd_path, categories):
@@ -106,6 +111,8 @@ def detect_module(rmd_path, categories):
     for cat in categories:
         if cat in base:
             return cat
+        elif "white_only" in base:
+            return "adipogenesis"
     return "uncategorized"
 
 # -------------------------------
@@ -124,17 +131,22 @@ def render_params_block(tpls, metadata, optional_params):
                 .replace("{subset_data}", metadata["subset_data"]) \
                 .replace("{odir}", metadata["odir"]) \
                 .replace("{optional_params}", optional_params)
-    block_fix = block.replace("\"file.path","file.path") \
-                      .replace("dataname)\"","dataname)")
-    return block_fix
+    #block_fix = block.replace("\"file.path","file.path") \
+     #                 .replace("dataname)\"","dataname)")
+    return block
 
 def render_setup_block(tpls, seed):
     tmpl = tpls["setup_block"]["content"]
     return tmpl.replace("{seed}", str(seed))
 
-def render_themes_block(tpls, pal, clusters):
+def render_themes_block(tpls, pal, clusters, spectral):
     tmpl = tpls["themes_block"]["content"]
-    return tmpl.replace("{pal}", pal).replace("{clusters}", clusters)
+    if spectral:
+        block = tmpl.replace("```$", "spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))\n```") 
+        return block.replace("{pal}", pal).replace("{clusters}", clusters)
+    else:
+        return tmpl.replace("{pal}", pal).replace("{clusters}", clusters)
+
 
 # -------------------------------
 # 6. Remove duplicate chunks
@@ -186,23 +198,30 @@ def remove_duplicate_chunks(body):
 # -------------------------------
 # 7. Filename generation & conflicts
 # -------------------------------
-def infer_analysis_type(original_fn):
+def infer_analysis_type(original_fn, module, dataname):
     base = os.path.basename(original_fn).lower().replace(".rmd", "")
     #Check for common analysis types
-    for hint in ["initial", "qc", "integration", "plots", "GO"]:
+    suffix = base.replace(module +"_", "") \
+                .replace(dataname+"_","") \
+                .replace(dataname,"")
+    print(suffix)
+    if suffix.strip() == "":
+      return None
+    
+    for hint in ["qc", "integration", "plots", "GO"]:
         if hint in base:
             return hint 
     # If not use end of filename
-    fns = original_fn.split("_")
-    fns[-1] = fns[-1].replace(".Rmd","")
-    if len(fns) > 2:
-        return "_".join(fns[2:])
-    elif len(fns) >1:
-        return "_".join(fns[1:])
-    return "analysis"
+    fns = suffix.split("_")
+    return "_".join(fns[2:])
+    
 
-def generate_new_filename(module, dataname, original_fn):
-    return "{}_{}_{}.Rmd".format(module, dataname, infer_analysis_type(original_fn))
+# def generate_new_filename(module, dataname, original_fn):
+#     analysis_type = infer_analysis_type(original_fn, module, dataname)
+#     if analysis_type == None:
+#         return "{}_{}.Rmd".format(module, dataname)
+#     else:
+#         return "{}_{}_{}.Rmd".format(module, dataname, analysis_type)
 
 def resolve_conflict(original_fn, new_fn, target_dir):
     target_path = os.path.join(target_dir, new_fn)
@@ -243,23 +262,21 @@ def migrate_file(src_rmd, dest_root, tpls, categories, default_seed=1234, dry_ru
     subset_data = params.get("subset_data", "F")
 
     # Optional params beyond core keys (e.g., resolution, etc.)
-    optional_keys = [k for k in params.keys() if k not in ["module", "dataname", "load_data", "subset_data"]]
+    optional_keys = [k for k in params.keys() if k not in ["module", "dataname", "load_data", "subset_data","odir"]]
     optional_lines = ["{} = {}".format(k, params[k]) for k in optional_keys]
     optional_params_rendered = "\n".join(optional_lines)
 
     libs = extract_libraries(src_rmd)
-    pal, clusters = extract_palettes(src_rmd)
+    pal, clusters,spectral = extract_palettes(src_rmd)
     if not pal or not clusters:
         pal = categories.get(module, {}).get("pal", 'c("#1F78B4")')
         clusters = categories.get(module, {}).get("clusters", "ggsci::pal_simpsons()(12)")
 
-    new_fn = generate_new_filename(module, dataname, src_rmd)
+    new_fn = os.path.basename(src_rmd)#generate_new_filename(module, dataname, src_rmd)
 
     # Destination directories
     rmd_dir = os.path.join(dest_root, "analysis", module)
     figs_dir = os.path.join(dest_root, "analysis", module, dataname, "figures")
-    os.makedirs(rmd_dir, exist_ok=True)
-    os.makedirs(figs_dir, exist_ok=True)
 
     new_fn_resolved = resolve_conflict(src_rmd, new_fn, rmd_dir)
     if new_fn_resolved is None:
@@ -268,9 +285,13 @@ def migrate_file(src_rmd, dest_root, tpls, categories, default_seed=1234, dry_ru
         return report
 
     if not confirm("Migrate {} as {}?".format(os.path.basename(src_rmd), new_fn_resolved)):
-        info("Skipped {}".format(src_rmd))
-        report.append({"original": os.path.basename(src_rmd), "new": new_fn_resolved, "action": "Skipped"})
-        return report
+        add_new_name = ask("Enter a new file name or press Enter to skip file migration.")
+        if add_new_name != "":
+          new_fn_resolved = resolve_conflict(src_rmd, add_new_name, rmd_dir)
+        else:
+          info("Skipped {}".format(src_rmd))
+          report.append({"original": os.path.basename(src_rmd), "new": new_fn_resolved, "action": "Skipped"})
+          return report
 
     # Read original content
     with open(src_rmd, "r", encoding="utf-8") as f:
@@ -312,10 +333,13 @@ def migrate_file(src_rmd, dest_root, tpls, categories, default_seed=1234, dry_ru
     )
 
     setup_block = render_setup_block(tpls, default_seed)
-    themes_block = render_themes_block(tpls, pal, clusters)
+    themes_block = render_themes_block(tpls, pal, clusters, spectral)
     
     new_body = body
     #new_body = remove_duplicate_chunks(body)
+    ## format odir for saving (don't need odir + dataname)
+    new_body.replace("here(odir,dataname","here(odir") \
+            .replace("here(odir, dataname","here(odir")
         
     joined_blocks = "\n\n".join([libs_block, meta_block, setup_block, themes_block])
     new_content = "---" + new_header + "---\n\n" + joined_blocks + "\n\n" + new_body

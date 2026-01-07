@@ -1,0 +1,32 @@
+levelName
+Node 0: 0                         
+ ¦--Node 1: 0                     
+ ¦   ¦--Cluster 1                 
+ ¦   °--Node 3: 0                 
+ ¦       ¦--Node 6: 0             
+ ¦       ¦   ¦--Cluster 3         
+ ¦       ¦   °--Cluster 4         
+ ¦       °--Node 7: 0             
+ ¦           ¦--Cluster 5         
+ ¦           °--Node 11: 0        
+ ¦               ¦--Cluster 10    
+ ¦               °--Cluster 11    
+ °--Node 2: 0                     
+     ¦--Node 4: 0                 
+     ¦   ¦--Node 8: 0             
+     ¦   ¦   ¦--Cluster 6         
+     ¦   ¦   °--Cluster 7         
+     ¦   °--Node 9: 0             
+     ¦       ¦--Cluster 8         
+     ¦       °--Node 12: 0        
+     ¦           ¦--Cluster 12    
+     ¦           °--Node 14: 0    
+     ¦               ¦--Cluster 15
+     ¦               °--Cluster 16
+     °--Node 5: 0                 
+         ¦--Cluster 2             
+         °--Node 10: 0            
+             ¦--Cluster 9         
+             °--Node 13: 0        
+                 ¦--Cluster 13    
+                 °--Cluster 14    

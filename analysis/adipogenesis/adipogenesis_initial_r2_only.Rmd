@@ -4,48 +4,61 @@ author: "Sarah Hazell Pickering"
 date: "2024-08-26"
 output: html_document
 ---
+
 Quality control and Mt filtering for adipogenesis scRNAseq (gene-level). More specific analyses white_only and white_vs_beige come start from this seurat object.   
 
 Cellranger was run on day1 and day3 samples in "read2 only" mode, to match the way the second replicate was sequenced.  I've just linked day0 from donor6 into the same directory, will replace if necessary, but since day0 cells are so different, it shouldn't make a difference that they were processed in PE mode.
 
 Goal: to assess if R2 only mode removed the replicate differences at day 1 (it minimised them yes).  
 
-```{r params}
-module="adipogenesis"
-dataname = "initial_r2_only"
-library(here); i_am(file.path("analysis",paste0(module, "_", dataname, ".Rmd")))
-indir = here("data/cellranger/count_r2_only") #links atm; todo: link to GEO counts
-odir = here("output", module, dataname) 
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(Seurat)
+library(clusterProfiler)
+library(dplyr)
+library(enrichplot)
+library(ggplot2)
+library(here)
+library(patchwork)
+```
 
-load_data = T #load 10x counts on first run through
+```{r params}
+module = "adipogenesis"
+dataname = "initial_r2_only"
+load_data = F #load 10x counts on first run through
 subset_data = F
 
-if (!dir.exists(here(odir, dataname))){dir.create(here(odir,dataname), recursive = T)}
-```
-
-```{r libs, warning=F, message=F, echo=F}
-library(dplyr)
-library(ggplot2)
-library(Seurat)
-library(BPCells)
-library(patchwork)
-library(clusterProfiler)
-library(enrichplot)
+rmd_filename = "adipogenesis_initial_r2_only"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+indir = here("data/cellranger/count_r2_only") #links atm; todo: link to GEO counts
+odir = here("output", module, dataname) 
 ```
 
 
-```{r theme}
+```{r setup}
+set.seed(8)
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
 pal = c("#1F78B4", "#B2DF8A","#85C2EA", "#B3B3B3","#F18486","#FDBF6F","#E31A1C")
 clusters = tvthemes::gravityFalls_pal()(13)
 spectral = rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
-
-theme_hp = theme_classic(base_size=15) + 
-		  theme(axis.line = element_line(linewidth = 0.25),
-		        axis.ticks = element_line(linewidth=0.25),
-		        strip.background = element_blank(), # remove boxes around facet labels
-		        )
-theme_set(theme_hp)
 ```
+
+
+
 
 ## Read data
 
@@ -70,11 +83,11 @@ if (load_data==FALSE){# load count matrices
   aggr = merge(data_list[[1]], y= data_list[2:length(data_list)], 
                add.cell.ids = gsub("_",".",samples), project=dataname )
   
-  saveRDS(aggr,here(odir,dataname, "unfiltered_object.rds"))
+  saveRDS(aggr,here(odir, "unfiltered_object.rds"))
 
   rm(data_list, bc_matrix, so)
 } else if(load_data){
-  aggr = readRDS(here(odir, dataname, "unfiltered_object.rds"))
+  aggr = readRDS(here(odir, "unfiltered_object.rds"))
 }
 
 aggr
@@ -344,18 +357,18 @@ p+ scale_y_discrete(labels=shorten(levels(p$data$Description)))
 
 ```{r save}
 if (subset_data == F){
-  saveRDS(filt, file = here(odir,dataname, "complete_analysis.rds"))
-  write.table(norm.markers, here(odir,dataname, "marker_genes.txt"),
+  saveRDS(filt, file = here(odir, "complete_analysis.rds"))
+  write.table(norm.markers, here(odir, "marker_genes.txt"),
             sep="\t", row.names = F)
-  write.table(clgo, here(odir,dataname, "ORA_marker_genes.txt"),
+  write.table(clgo, here(odir, "ORA_marker_genes.txt"),
             sep="\t", row.names = F)
   write.table(composition, here(odir, "cluster_composition.txt"),
               sep="\t", row.names = F)
   Idents(filt) = "orig.ident"
   sbs = subset(filt, downsample=1000)
-  saveRDS(sbs, file = here(odir,dataname, "10%_complete_analysis.rds"))
+  saveRDS(sbs, file = here(odir, "10%_complete_analysis.rds"))
 } else if (subset_data){
-  saveRDS(filt, file = here(odir,dataname, "10%_subset_analysis.rds"))
+  saveRDS(filt, file = here(odir, "10%_subset_analysis.rds"))
 }
 ```
 

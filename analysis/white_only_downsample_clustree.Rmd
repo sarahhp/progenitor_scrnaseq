@@ -10,7 +10,7 @@ Testing clusters found at 0.5 and 0.8 resolution -> and making a tree for larger
 
 ```{r params}
 module="adipogenesis"
-dataname = "white_only_downsample"
+dataname = "white_only_downsampledim30"
 library(here); i_am(file.path("analysis",paste0(dataname, ".Rmd")))
 odir = here("output", module, dataname) 
 
@@ -339,9 +339,9 @@ a
 ```{r}
 umap_name="umap.rpca"
 clu_name = "res0.8_clusters"
-DimPlot(filt, split.by="time", reduction = umap_name, ncol=3, group.by="time", combine=F, cols = pal)
+DimPlot(sbs, split.by="time", reduction = umap_name, ncol=3, group.by="time", combine=F, cols = pal)
 
-DimPlot(filt, split.by="time", reduction = umap_name, ncol=3, group.by=clu_name, combine=F, cols = clusters)
+DimPlot(sbs, split.by="time", reduction = umap_name, ncol=3, group.by=clu_name, combine=F, cols = clusters)
 ```
 
 ```{r}

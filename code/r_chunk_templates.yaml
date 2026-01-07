@@ -9,13 +9,13 @@ params_block:
   content: |
     ```{r params}
     module = "{module}"
-    dataname = "{dataname}"
+    dataname = {dataname}
     load_data = {load_data}
     subset_data = {subset_data}
 
     rmd_filename = "{rmd_filename}"
     i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
-    odir = "{odir}"
+    odir = {odir}
     {optional_params}
     ```
 
