@@ -8,5 +8,6 @@
 .DS_Store
 data/cellranger/*
 data/scafe/count
+output/*/*/*.rds
 output/*.rds
 .snakemake
