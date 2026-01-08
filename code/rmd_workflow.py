@@ -1,4 +1,10 @@
 
+
+##-------------------------------------------------##
+##    Mature adipocytes (day 15) from 6 subjects   ##
+##                  bulk RNA-seq                   ##
+##-------------------------------------------------##
+
 ODIR = "../output/bulk"
 ADIR = "../analysis/bulk"
 # 
@@ -24,7 +30,41 @@ rule bulk_RNAseq_expr:
         ADIR + "/bulk_day15_RNAseq_expr.Rmd"
 
 ##-------------------------------------------------##
+##      Progenitors (day 0) from 6 subjects        ##
+##                   sc RNA-seq                    ##
+##-------------------------------------------------##
+
+ADIR = "analysis/progenitors"
+INDIR = "data/cellranger/count_no_introns/day0"
+ODIR = "output/progenitors/initial"
+
+rule progenitors_initial:
+    input:
+        in10x = expand("{dir}/{sample}/outs/filtered_feature_bc_matrix/{files}",
+                        dir = INDIR,
+                        sample = expand("day0_subjectS{s}", s=range())
+                        files = ["barcodes.tsv.gz","features.tsv.gz","matrix.mtx.gz"]),
+    output:
+        bpcells = directory(expand("{dir}/bpcells/{sample}",
+                        dir = ODIR,
+                        sample = ["white_day3","white_day1_rep2","white_day1",
+                                    "asc_day0",
+                                    "beige_day1", "beige_day1_rep2","beige_day3"])),
+        report = ADIR + "/adipogenesis_initial_r2_only.html",
+        raw_rdata = ODIR + "unfiltered_object.rds",
+        rdata = ODIR + "/complete_analysis.rds",
+        subset_rdata = ODIR + "/10%_complete_analysis.rds",
+        marker_genes = ODIR + "/marker_genes.txt",
+        GO_table =  ODIR +"/ORA_marker_genes.txt",
+        cluster_info = ODIR + "/cluster_composition.txt",
+    script:
+        ADIR + "/adipogenesis_initial_r2_only.Rmd"
+        
+        
+        
+##-------------------------------------------------##
 ##        Adipogenesis day 0, day 1 & day3         ##
+##                   sc RNA-seq                    ##
 ##-------------------------------------------------##
 
 ADIR = "analysis/adipogenesis"
@@ -95,7 +135,7 @@ rule white_only_downsample:
     script:
         ADIR + "/white_only_downsample.Rmd"
         
-rue             
+#already migrated: clustree           
                 
                 
                 

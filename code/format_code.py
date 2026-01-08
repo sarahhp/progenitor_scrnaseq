@@ -69,6 +69,9 @@ def extract_palettes(rmd_path):
                 pal = s.split("=", 1)[1].strip()
             if s.startswith("clusters=") or s.startswith("clusters ="):
                 clusters = s.split("=", 1)[1].strip()
+                #if "(" in clusters and ")" not in clusters:
+                    #grab next line
+                    
             if s.startswith("spectral=") or s.startswith("spectral ="):
                 spectral = True
     return pal, clusters, spectral
@@ -88,7 +91,7 @@ def extract_params_chunk(rmd_path):
             if in_params:
                 if s.startswith("```"):
                     break
-                if "=" in s and not s.startswith("#") and not "{" in s:
+                if "=" in s and not s.startswith("#") and not "{" in s and not "i_am" in s:
                     key, val = s.split("=", 1)
                     key = key.strip()
                     val = val.strip().replace('"', '\"').replace("'", "\'")
@@ -98,7 +101,7 @@ def extract_params_chunk(rmd_path):
                 fi = rmd_path.split("_")
                 meta["module"] = fi[0]
                 meta["dataname"] = fi[1]
-    print("Extracted params {}".format(meta))
+    #print("Extracted params {}".format(meta))
     return meta
 
 def detect_module(rmd_path, categories):
@@ -142,7 +145,8 @@ def render_setup_block(tpls, seed):
 def render_themes_block(tpls, pal, clusters, spectral):
     tmpl = tpls["themes_block"]["content"]
     if spectral:
-        block = tmpl.replace("```$", "spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))\n```") 
+        spectral = "spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))"
+        block = tmpl.replace("\n```\n", "\n" + spectral +"\n```\n") 
         return block.replace("{pal}", pal).replace("{clusters}", clusters)
     else:
         return tmpl.replace("{pal}", pal).replace("{clusters}", clusters)
@@ -310,6 +314,15 @@ def migrate_file(src_rmd, dest_root, tpls, categories, default_seed=1234, dry_ru
     new_header = yaml_header
     if "output:" not in new_header:
         new_header += "\noutput: html_document\n"
+        
+    # Extract preamble for document top
+    preamble = ""
+    parts = body.split("```{r")
+    if "```" not in parts[0]:
+        preamble = parts[0]
+        body = "```{r" + "```{r".join(parts[1:])
+        print("Adding preamble to the top of document")
+        
 
     # Render blocks
     libs_block = ""
@@ -337,18 +350,34 @@ def migrate_file(src_rmd, dest_root, tpls, categories, default_seed=1234, dry_ru
     
     new_body = body
     #new_body = remove_duplicate_chunks(body)
-    ## format odir for saving (don't need odir + dataname)
-    new_body.replace("here(odir,dataname","here(odir") \
-            .replace("here(odir, dataname","here(odir")
+    
+    ## Find and replace edits
+    search_strs = {"file.path(odir":"here(odir",
+                      "here(odir,dataname":"here(odir",
+                     "here(odir, dataname","here(odir",
+                     "figdir":"fig_dir"
         
+    }#to do: from template 
+    #search_strings = tpls["strings_to_replace"]
+    for s in search_strings.keys():
+        if s in new_body:
+            new_body = new_body.replace(s, search_strings[s])
+            print{"Replacing \"{}\" {} times".format(s,new_body.count(s))}
+    #new_body = new_body.replace("file.path(odir","here(odir")
+    #new_body = new_body.replace("here(odir,dataname","here(odir") \
+     #                  .replace("here(odir, dataname","here(odir")
+    
+            
+    ##Build Rmd  
     joined_blocks = "\n\n".join([libs_block, meta_block, setup_block, themes_block])
-    new_content = "---" + new_header + "---\n\n" + joined_blocks + "\n\n" + new_body
+    new_content = "---" + new_header + "---\n" + preamble + \
+                    joined_blocks + "\n\n" + new_body
 
     dest_rmd = os.path.join(rmd_dir, new_fn_resolved)
     if dry_run:
-        info("Dry-run; preview first 500 chars:")
+        info("Dry-run; preview first 3000 chars:")
         print("-" * 40)
-        print(new_content[:1000] + "...")
+        print(new_content[:3000] + "...")
         print("-" * 40)
     else:
         with open(dest_rmd, "w", encoding="utf-8") as f:
