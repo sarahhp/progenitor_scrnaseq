@@ -1,0 +1,16 @@
+levelName
+Node 0: 0                
+ ¦--Node 1: 0            
+ ¦   ¦--Node 3: 0        
+ ¦   ¦   ¦--Cluster 1    
+ ¦   ¦   °--Node 5: 0    
+ ¦   ¦       ¦--Cluster 5
+ ¦   ¦       °--Cluster 6
+ ¦   °--Cluster 2: 1     
+ °--Node 2: 0            
+     ¦--Node 4: 0        
+     ¦   ¦--Cluster 3    
+     ¦   °--Node 6: 0    
+     ¦       ¦--Cluster 7
+     ¦       °--Cluster 8
+     °--Cluster 4: 0.79  

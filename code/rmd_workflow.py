@@ -60,7 +60,8 @@ rule progenitors_initial:
     script:
         ADIR + "/adipogenesis_initial_r2_only.Rmd"
         
-        
+#progenitors_integration_trial.Rmd (migrated, knit) then -> pronotiors_rpca_clustree.Rmd (no output; migrated, developing)
+#progenitors_rpca_integration.Rmd (creates the rpca object and completes all the information (migrated))
         
 ##-------------------------------------------------##
 ##        Adipogenesis day 0, day 1 & day3         ##

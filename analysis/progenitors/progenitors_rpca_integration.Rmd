@@ -1,0 +1,237 @@
+---
+title: "progenitors_rpca_integration"
+output: html_document
+---
+
+
+Integrate donors using RPCA, with parameters determined from integration_trial.Rmd and *clustree.Rmd
+
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(Seurat)
+library(SeuratWrappers)
+library(dplyr)
+library(ggplot2)
+library(ggsci)
+library(here)
+```
+
+```{r params}
+module = "progenitors"
+dataname = "rpca"
+load_data = T #Loading initial seurat analysis
+subset_data = F
+
+rmd_filename = "progenitors_rpca_integration"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+indir = here("output", module, "initial")
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#DA1819", "#00AED1", "#434D51","#EBB400","#691A93","#3AAD00")
+clusters = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00","#AC8AD0")
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+
+## Read data
+
+```{r load_data}
+if (subset_data){
+  filt = readRDS(here(indir, "10%_complete_analysis.rds"))
+  Idents(filt) = "seurat_clusters"
+} else{
+  filt = readRDS(here(indir, "complete_analysis.rds"))
+}
+
+filt[["RNA"]] <- split(filt[["RNA"]], f = filt$orig.ident)
+filt
+head(filt@meta.data) 
+```
+
+### save initial maps
+```{r}
+filt$initial_clusters = filt$seurat_clusters
+filt[["initial.umap"]] = filt[["umap"]]
+filt[["initial.tsne"]] = filt[["tsne"]]
+```
+
+```{r}
+DimPlot(filt, cols=unint_clusters, label=T)
+DimPlot(filt, cols=unint_clusters, label=T, reduction = "initial.tsne")
+```
+
+
+## RPCA Integration
+
+```{r setup-variables-rpca}
+method_name="rpca"
+red_name = paste("integrated", sep=".", method_name)
+umap_name = paste("umap", sep=".", method_name)
+clu_name = paste( method_name, sep="_", "clusters")
+tsne_name = paste(method_name, "tsne", sep=".")
+```
+
+```{r}
+filt = IntegrateLayers(filt, method= RPCAIntegration, orig.reduction = "pca",
+                       new.reduction = red_name)
+```
+
+```{r}
+filt <- FindNeighbors(filt, reduction =  red_name, dims = 1:20, verbose=F)
+filt <- FindClusters(filt, resolution = 0.3, cluster.name =  clu_name)
+filt <- RunUMAP(filt, reduction = red_name, dims = 1:20, reduction.name = umap_name)
+```
+
+```{r}
+DimPlot(filt, reduction = umap_name,  group.by = clu_name, label=T, cols=clusters)
+DimPlot(filt, reduction = umap_name,  group.by = "orig.ident", label=T, cols=pal, label.color = "white", label.box = T)
+DimPlot(filt, reduction = umap_name,  group.by = "initial_clusters", label=T, cols=unint_clusters)
+DimPlot(filt, reduction = "initial.umap",  group.by = clu_name, label=T)
+```
+
+```{r}
+filt = RunTSNE(filt, reduction = red_name, reduction.name = tsne_name, dims=1:20)
+```
+
+```{r}
+DimPlot(filt, reduction = tsne_name,  group.by = clu_name, label=T, cols=clusters)
+DimPlot(filt, reduction = tsne_name,  group.by = "orig.ident", label=T, cols=pal, label.color = "white", label.box = T)
+DimPlot(filt, reduction = tsne_name,  group.by = "initial_clusters", label=T, cols=unint_clusters)
+DimPlot(filt, reduction = "initial.tsne",  group.by = clu_name, label=T)
+```
+
+
+```{r}
+#set default reductions
+filt[["umap"]] = filt[[umap_name]]
+filt[["tsne"]] = filt[[tsne_name]]
+filt
+```
+
+### Cluster Composition
+```{r}
+composition = group_by(filt@meta.data, subject,seurat_clusters) %>% count()
+composition = composition[order(composition$n, decreasing = T),]
+colnames(composition) = c("donor_id","seurat_clusters","n_cells")
+#calculate proportions directly, then plot percentage just for the three cyc;ling cells
+composition = group_by(composition, donor_id) %>% mutate(cells_per_donor = n_cells/sum(n_cells))
+composition = group_by(composition, seurat_clusters) %>% mutate(cells_per_cluster = n_cells/sum(n_cells))
+head(composition)
+```
+
+
+```{r donor_composition, dev=c('png','pdf')}
+ggplot(composition) + geom_bar(stat="identity",aes(y=donor_id, x=n_cells, fill=seurat_clusters)) + 
+  scale_y_discrete(limits=rev)+ scale_x_continuous(expand = c(0.01, 0))+ 
+  theme_classic(base_size=15) + scale_fill_manual(values=clusters)
+ggplot(composition) + geom_bar(stat="identity",aes(y=donor_id, x=n_cells, fill=seurat_clusters), position = "fill") +
+  scale_y_discrete(limits=rev)+ scale_x_continuous(expand = c(0.01, 0))+ 
+  theme_classic(base_size=15)  + scale_fill_manual(values=clusters)
+```
+
+```{r cluster_composition, dev=c('png','pdf')}
+ggplot(composition) + geom_bar(stat="identity",aes(fill=donor_id, x=n_cells, y=seurat_clusters)) +
+    scale_y_discrete(limits=rev)+ scale_fill_manual(values=pal)  + scale_x_continuous(expand = c(0.01, 0))+ 
+  theme_classic(base_size=15)
+ggplot(composition) + geom_bar(stat="identity",aes(fill=donor_id, x=n_cells, y=seurat_clusters), position = "fill") +
+  scale_y_discrete(limits=rev)+ scale_fill_manual(values=pal)  + scale_x_continuous(expand = c(0.01, 0))+ 
+  theme_classic(base_size=15)
+```
+
+```{r cluster_composition_top}
+ggplot(filter(composition, seurat_clusters %in% c(0,1,2,3))) + 
+         geom_bar(stat="identity",aes(y=donor_id, x=n_cells, fill=seurat_clusters)) + 
+  scale_y_discrete(limits=rev)+ scale_x_continuous(expand = c(0.01, 0))+ 
+  theme_classic(base_size=15) + scale_fill_manual(values=clusters)
+ggplot(filter(composition, seurat_clusters %in% c(0,1,2,3))) + geom_bar(stat="identity",aes(y=donor_id, x=n_cells, fill=seurat_clusters), position = "fill") +
+  scale_y_discrete(limits=rev)+ scale_x_continuous(expand = c(0.01, 0))+ 
+  theme_classic(base_size=15)  + scale_fill_manual(values=clusters)
+```
+
+## Find Markers
+```{r densify}
+filt = JoinLayers(filt)
+Idents(filt) = clu_name
+cluster.markers = FindAllMarkers(filt, min.pct=0.25, logfc.threshold=0.5, 
+                              densify=T, only.pos=T)
+head(cluster.markers); dim(cluster.markers)
+table(filter(cluster.markers,p_val_adj < 0.01) %>% pull(cluster))
+
+top.markers =  as.data.frame(cluster.markers) %>%
+    group_by(cluster) %>% filter(p_val_adj < 0.01) %>%
+    slice_max(n=2, order_by = avg_log2FC*pct.1)
+top.markers
+```
+
+
+### Marker Gene Dot Plots
+```{r dev=c("png","pdf")}
+DotPlot(filt, features=rev(unique(top.markers$gene))) & 
+  scale_colour_gradientn(colours = spectral) & coord_flip()
+
+top.markers$gene = factor(top.markers$gene, levels=rev(unique(top.markers$gene)))
+overlap.to.plot = filter(cluster.markers, gene %in% top.markers$gene)
+overlap.to.plot$gene = factor(overlap.to.plot$gene, levels=levels(top.markers$gene))
+
+ggplot(overlap.to.plot, aes(y=gene, size=abs(avg_log2FC), color=cluster,
+                    x=cluster)) + 
+  geom_point() + 
+  theme(axis.text.x=element_text(angle=30, hjust=1))  + 
+  scale_color_manual(values=clusters)
+```
+
+Visualisation methods
+
+```{r marker_vis}
+RidgePlot(filt,features = c("ACTA2","TAGLN"), slot="scale.data")
+
+for (i in 1:(length(top.markers$gene)/4)){
+  start = ((i-1)*4)+1; print(start)
+  end = i*4; print(end)
+  to_plot = top.markers$gene[start:end]
+  to_plot = as.character(to_plot)
+  p= FeaturePlot(subset(filt,downsample=1000), features = to_plot) & 
+  scale_colour_gradientn(colours = spectral)
+  print(p)
+}
+
+FeaturePlot(subset(filt,downsample=1000), features = c("percent.mt", "nCount_RNA","nFeature_RNA")) & 
+  scale_colour_gradientn(colours = spectral)
+FeaturePlot(subset(filt,downsample=1000), 
+            features = c("integratedrpca_1","integratedrpca_2","integratedrpca_3","integratedrpca_4"))& 
+  scale_colour_gradientn(colours = spectral)
+```
+
+
+```{r save}
+if (subset_data == FALSE){
+  saveRDS(filt, file = here(odir,"complete_analysis.rds"))
+  write.table(cluster.markers, here (odir, "marker_genes.txt"),
+            sep="\t", row.names = F)
+  write.table(composition, here(odir, "cluster_composition.txt"),
+              sep="\t", row.names = F)
+  sub = subset(filt, downsample=1000)
+  saveRDS(sub,here(odir,"10%_complete_analysis.rds"))
+} else if (subset_data){ #if subset, don't save complete analysis
+  saveRDS(filt,here(odir,"10%_subset_analysis.rds"))
+}
+```

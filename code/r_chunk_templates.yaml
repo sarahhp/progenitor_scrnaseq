@@ -63,9 +63,9 @@ categories:
     clusters: 'tvthemes::gravityFalls_pal()(13)'
 
 strings_to_replace:
-    file.path(odir: "here(odir",
-    here(odir,dataname: "here(odir",
-    here(odir, dataname: "here(odir",
+    file.path(odir: "here(odir"
+    here(odir,dataname: "here(odir"
+    here(odir, dataname: "here(odir"
     figdir: "fig_dir"
 
 go_blocks:

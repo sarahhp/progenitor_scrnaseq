@@ -354,15 +354,15 @@ def migrate_file(src_rmd, dest_root, tpls, categories, default_seed=1234, dry_ru
     ## Find and replace edits
     search_strs = {"file.path(odir":"here(odir",
                       "here(odir,dataname":"here(odir",
-                     "here(odir, dataname","here(odir",
+                     "here(odir, dataname":"here(odir",
                      "figdir":"fig_dir"
         
     }#to do: from template 
-    #search_strings = tpls["strings_to_replace"]
-    for s in search_strings.keys():
+    search_strs = tpls["strings_to_replace"]
+    for s in search_strs.keys():
         if s in new_body:
-            new_body = new_body.replace(s, search_strings[s])
-            print{"Replacing \"{}\" {} times".format(s,new_body.count(s))}
+            new_body = new_body.replace(s, search_strs[s])
+            print("Replacing \"{}\" {} times".format(s,new_body.count(s)))
     #new_body = new_body.replace("file.path(odir","here(odir")
     #new_body = new_body.replace("here(odir,dataname","here(odir") \
      #                  .replace("here(odir, dataname","here(odir")
