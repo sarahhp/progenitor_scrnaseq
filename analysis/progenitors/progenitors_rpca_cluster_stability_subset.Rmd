@@ -1,0 +1,226 @@
+---
+title: "progenitors_rpca_cluster_stability"
+author: "Sarah Hazell Pickering"
+date: "2024-08-16"
+output: html_document
+---
+Subset :) Mainly developing the function to annotate current clusters with shc info
+Exploring cluster stability with clustree on resolutions 0.1 -> 1.2 and sch posthoc heirarchical clustering and statistcial testing
+
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(Seurat)
+library(clusterProfiler)
+library(clustree)
+library(dplyr)
+library(ggplot2)
+library(ggsci)
+library(here)
+library(tidyr)
+library(scSHC)
+```
+
+```{r params}
+module = "progenitors"
+dataname = "integration_trial"
+load_data = T #Loading previous multiple res data?
+subset_data = T
+
+rmd_filename = "progenitors_rpca_cluster_stability_subset"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#DA1819", "#00AED1", "#434D51","#EBB400","#691A93","#3AAD00")
+clusters = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00","#AC8AD0", tvthemes::gravityFalls_pal()(12))
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+## load data
+
+```{r}
+if (load_data){
+    filt = readRDS(here(odir,"multiple_resolutions.rds"))
+    if (subset_data){
+        Idents(filt) = "res0.3_clusters"
+        filt = subset(filt, downsample=500)
+    } 
+} 
+
+if (!load_data){
+  if (subset_data){
+    filt = readRDS(here(odir, "10%_complete_analysis.rds"))
+} else{
+    filt = readRDS(here(odir, "complete_analysis.rds"))
+    }
+}
+
+filt
+table(filt$res0.3_clusters)
+```
+
+```{r}
+if (!load_data){
+    filt[["mnn.reconstructed"]] =NULL
+filt = JoinLayers(filt)
+Idents(filt) = "rpca_clusters"
+filt
+head(filt@meta.data) 
+table(filt$rpca_clusters)
+
+red_to_rm = grep("harmony|fastmnn", names(filt@reductions), value = T)
+for (red in red_to_rm){
+  print(paste0("red removed ", red))
+  filt[[red]] = NULL
+}
+#set default reductions
+filt[["umap"]] = filt[["umap.rpca"]]
+filt[["tsne"]] = filt[["rpca.tsne"]]
+filt
+}
+
+```
+
+## Testing different resolutions
+
+```{r}
+if (!load_data){
+    res_to_test = c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8, 1, 1.2)
+    filt = FindNeighbors(filt, dims=1:20, reduction = "integrated.rpca")
+    for (res in res_to_test){
+      filt = FindClusters(filt, resolution = res, cluster.name = paste0("res",res,"_clusters"))
+    }
+    
+    head(filt@meta.data)
+    table(filt$res0.5_clusters)
+    table(filt$rpca_clusters)
+}
+
+```
+## save and or load
+
+```{r}
+if(!subset_data){
+    saveRDS(filt, here(odir,"multiple_resolutions.rds"))
+}
+```
+
+## UMAPs at different res
+```{r}
+DimPlot(filt, group.by = "res0.1_clusters")
+DimPlot(filt, group.by = "res0.5_clusters") + scale_color_manual(values=clusters)
+DimPlot(filt, group.by = "res0.4_clusters") + scale_color_manual(values=clusters) #Keep res0.5 clu7 separate
+DimPlot(filt, group.by = "res0.3_clusters") + scale_color_manual(values=clusters) #Or merge clu7
+DimPlot(filt, group.by = "res0.2_clusters") + scale_color_manual(values=clusters) #merge cell cycle and subject2
+```
+
+## Tree plots
+
+```{r tree}
+clustree(filt, prefix="res", suffix ="_clusters")
+clustree(filt, prefix="res", suffix ="_clusters", node_colour="sc3_stability")
+```
+
+## Cluster tests with scSHC
+
+I imagine we're going to need batch 
+```{r}
+counts = as.matrix(filt[["RNA"]]$counts)
+new_clusters = testClusters(counts, cluster_ids = as.character(filt$res1.2_clusters), 
+                            batch = as.character(filt$subject),
+                            parallel = F, cores = 1)
+```
+
+
+### SHC clusters
+```{r}
+table(new_clusters[[1]], filt$res1.2_clusters)
+table(new_clusters[[1]], filt$subject)
+table(filt$res1.2_clusters, filt$subject)
+```
+
+```{r}
+print(new_clusters[[2]])
+```
+
+### Compare to res 0.3
+
+```{r}
+table(new_clusters[[1]], filt$res0.3_clusters)
+```
+
+```{r}
+filt$shc_clusters = new_clusters[[1]]
+DimPlot(filt, group.by=c("shc_clusters","res1.2_clusters"), cols=clusters)
+DimPlot(filt, group.by=c("shc_clusters","res1.2_clusters"), cols=clusters, reduction="tsne")
+DimPlot(filt, group.by=c("shc_clusters","res0.3_clusters"), cols=clusters, reduction="tsne")
+DimPlot(filt, group.by=c("shc_clusters","res0.3_clusters"), cols=clusters,)
+DimPlot(filt, group.by=c("res0.3_clusters","res0.8_clusters"), cols=clusters, reduction="tsne")
+```
+
+## Create an annotation function
+
+```{r}
+#simple method:
+freq = table(new_clusters[[1]], filt$res0.3_clusters)
+freq
+annot = paste0("new_p",max.col(freq)-1)
+annot
+
+contributing_clus = (freq/rowSums(freq) > 0.25)
+contributing_clus
+colnames(contributing_clus)
+
+annot[7] = "new_p3/2"
+
+shc_clu = c()
+for (i in 1:nrow(freq)){
+    row = freq[i,]
+    print(row)
+    cat("\n")
+    primary_clu = names(which.max(row))
+    primary_clu
+    contributing_clus = row/sum(row) > 0.25
+    if (sum(contributing_clus) >1){
+        secondary_clus = names(row)[row/sum(row) > 0.25 & names(row) != primary_clu]
+        shc_clu = c(shc_clu, paste0("new_p", primary_clu,"//p", secondary_clus))
+    } else{
+        shc_clu = c(shc_clu, paste0("new_p", primary_clu))
+    }
+        
+  
+}
+shc_clu
+```
+
+
+##Extract pvals per cluster
+
+```{r}
+dend = new_clusters[[2]]
+as.character(dend)
+str(dend)
+```
+
+
+
+## Check marker genes and ontology
+
