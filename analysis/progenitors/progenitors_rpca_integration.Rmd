@@ -83,7 +83,7 @@ DimPlot(filt, cols=unint_clusters, label=T, reduction = "initial.tsne")
 
 ## RPCA Integration
 
-```{r setup-variables-rpca}
+```{r setup_variables_rpca}
 method_name="rpca"
 red_name = paste("integrated", sep=".", method_name)
 umap_name = paste("umap", sep=".", method_name)

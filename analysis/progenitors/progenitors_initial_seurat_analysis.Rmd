@@ -26,7 +26,6 @@ subset_data = F #subset data to 10% total cells?
 rmd_filename = "progenitors_initial_seurat_analysis"
 i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
 odir = here("output", module, dataname)
-library(here); i_am(file.path("analysis",paste(module,sep = "_",dataname,"seurat_analysis.Rmd")))
 indir = here("data/cellranger/count_no_introns/day0")
 ```
 
@@ -253,9 +252,10 @@ ggplot(composition) + geom_bar(stat="identity",aes(fill=donor_id, x=n_cells, y=s
 
 ```{r umap, dev=c('png','pdf')}
 filt = RunUMAP(filt, dims=1:20)
-DimPlot(filt, reduction="umap", label=T, cols=clusters)
+DimPlot(filt, reduction="umap", label=F, cols=clusters)
 DimPlot(filt, reduction="umap", group.by = "subject", label=T, cols=pal, label.color = "white", label.box=T)
 DimPlot(filt, reduction="umap", split.by = "subject",group.by = "seurat_clusters", ncol=3, cols = clusters)
+DimPlot(filt, reduction="umap", label=T, cols=clusters)
 ```
 
 ## t-SNE

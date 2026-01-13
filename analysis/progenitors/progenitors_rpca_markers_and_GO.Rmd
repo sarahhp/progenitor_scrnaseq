@@ -1,0 +1,232 @@
+---
+title: "RPCA GO analysis"
+author: "Sarah Hazell Pickering"
+date: "2024-08-09"
+output: html_document
+---
+
+
+Integrated data using RPCA, plotting and marker gene detection.  
+
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(Seurat)
+library(clusterProfiler)
+library(dplyr)
+library(enrichplot)
+library(ggplot2)
+library(ggsci)
+library(here)
+```
+
+```{r params}
+module = "progenitors"
+dataname = "rpca"
+load_data = T #Loading initial seurat analysis
+subset_data = F
+
+rmd_filename = "progenitors_rpca_markers_and_GO"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#0A7EA8","#EF5780","#0A8550","#1C31D3","#EE9614","#670F39")
+clusters = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00","#AC8AD0")
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+## Read data
+
+```{r load_data}
+if (subset_data){
+  filt = readRDS(here(odir, "10%_complete_analysis.rds"))
+} else{
+  filt = readRDS(here(odir, "complete_analysis.rds"))
+}
+filt
+colnames(filt@meta.data) 
+table(filt$rpca_clusters)
+```
+
+```{r umap_basic}
+DimPlot(filt, reduction = "umap",  group.by="rpca_clusters", cols = clusters) + theme_hp +
+    scale_color_manual(values=clusters, name = "Progenitor \ncluster", labels =function(x) paste0("p",x))
+DimPlot(filt, reduction = "umap",  group.by="rpca_clusters", cols = clusters, 
+        split.by = "subject", ncol=3) + theme_hp  + 
+  scale_color_manual(values=clusters, name = "Progenitor \ncluster", labels =function(x) paste0("p",x))
+```
+
+## Top dimenssions from RPCA embeddings
+dominated by cell cycle
+
+```{r rpca_dimensions}
+table(filt$rpca_clusters)
+DimPlot(filt, reduction="integrated.rpca", group.by = "rpca_clusters", cols=clusters)
+DimPlot(filt, reduction="integrated.rpca", group.by = "rpca_clusters", cols=clusters, dims = c(3,4))
+DimPlot(filt, reduction="integrated.rpca", group.by = "rpca_clusters", cols=clusters, dims = c(5,6))
+DimPlot(filt, reduction="integrated.rpca", group.by = "rpca_clusters", cols=clusters, dims = c(7,8))
+```
+## Quality control metrics
+
+Subject S2 has a low gene/ count population
+
+```{r qc}
+FeaturePlot(filt, reduction = "umap", 
+            features=c("nFeature_RNA","nCount_RNA","percent.mt","RPL27A"))  & 
+  scale_color_gradientn(colours=spectral) &theme_hp
+VlnPlot(filt, group.by= "rpca_clusters", pt.size=0, cols=clusters,
+            features=c("nFeature_RNA","nCount_RNA","percent.mt")) &theme_hp
+```
+
+```{r qc2}
+FeatureScatter(filt,feature1="nFeature_RNA",feature2 = "percent.mt", 
+               group.by="subject", cols=pal, 
+               split.by = "rpca_clusters", ncol=4, pt.size=0.2,
+               shuffle=T)
+```
+
+## Read marker genes
+```{r}
+cluster.markers = read.delim(here(odir,"marker_genes.txt"))
+cluster.markers$cluster = factor(cluster.markers$cluster, levels=0:max(as.integer(cluster.markers$cluster)))
+head(cluster.markers)
+table(cluster.markers$cluster)
+```
+## Marker genes
+
+```{r marker_genes}
+top.markers =  cluster.markers %>%
+    group_by(cluster) %>% filter(p_val_adj < 0.01) %>%
+    slice_max(n=2, order_by = avg_log2FC*pct.1)
+top.markers
+
+top.markers$gene = factor(top.markers$gene, levels=rev(unique(top.markers$gene)))
+overlap.to.plot = filter(cluster.markers, gene %in% top.markers$gene)
+overlap.to.plot$gene = factor(overlap.to.plot$gene, levels=levels(top.markers$gene))
+
+
+ggplot(overlap.to.plot, aes(y=gene, size=abs(avg_log2FC), color=cluster,
+                    x=cluster)) + 
+  geom_point() + 
+  theme(axis.text.x=element_text(angle=30, hjust=1))  + 
+  scale_color_manual(values=clusters, guide="none") +scale_size_continuous(name="|log2FC|")+
+  scale_x_discrete(name = "Progenitor cluster", labels =function(x) paste0("p",x))
+```
+
+
+## GO setup
+```{r go_replace}
+phrases= read.delim(here("data/gene_sets/abbreviations.txt"))
+recap= read.delim(here("data/gene_sets/capitalisations.txt"))
+```
+
+```{r abrev_go}
+drama_shorten = function(ont) {
+for (x in 1:nrow(phrases)){
+ont = gsub( phrases$phrase[x],phrases$abbreviation[x], ont, ignore.case = T)
+    }
+  a = abbreviate(gsub("_"," ", gsub("^[[:alpha:]]*_","",tolower(ont))),minlength=41, dot=T, named = F)
+  a = stringr::str_to_sentence(a)
+  for (i in 1:nrow(recap))
+      a = gsub(sprintf("\\b%s\\b", recap$lowercase[i]),recap$capital[i],a, ignore.case = T)
+return(a)
+}
+```
+
+```{r load_gene_sets}
+molsig <- clusterProfiler::read.gmt(here("data/gene_sets/msigdb.v2024.1.Hs.symbols.gmt"))
+head(molsig); nrow(molsig)
+
+prefixes = c("HALLMARK", "KEGG","REACTOME", "WP", "GOBP", "GOCC","GOMF")
+colnames(molsig) = c("term","gene")
+some.molsig = molsig[gsub("_.*","", molsig$term) %in% prefixes,]
+some.molsig$term = factor(some.molsig$term)
+table(gsub("_.*","", some.molsig$term))
+rm(molsig)
+```
+
+## Cluster GO
+
+```{r}
+all.genes=rownames(filt)
+clgo = compareCluster(gene~cluster, data=filter(cluster.markers,p_val_adj < 0.01), 
+                      fun="enricher", TERM2GENE = some.molsig, universe = all.genes)
+
+clgo = mutate(clgo, cluster = factor(cluster, levels=c(0,1:max(as.integer(cluster)))))
+table(clgo@compareClusterResult$cluster)
+head(clgo)[,c(2,4:9)]
+nrow(filter(clgo, p.adjust < 0.01))
+summary(clgo@compareClusterResult$p.adjust)
+
+dotplot(filter(clgo,p.adjust < 0.01), x="cluster", showCategory=2)
+dotplot(clgo, x="cluster", showCategory=2, includeAll=F)
+dotplot(clgo, x="cluster", showCategory=5, includeAll=F) + theme(axis.text.y=element_text(size=8))
+```
+
+```{r cluster_go_unique, dev=c("png","pdf")}
+dfgo = as.data.frame(clgo)
+dfgo$short_desc =drama_shorten(dfgo$Description)
+go_to_plot = filter(dfgo, p.adjust < 0.01) %>% group_by(cluster) %>%
+              slice_min(n = 2, order_by = p.adjust)
+go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
+
+p = ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point()+ 
+  theme(axis.text.x=element_text(angle=30, hjust=1), axis.title.y = element_blank()) +  
+  scale_color_manual(values=clusters, guide="none") + scale_size(name="Genes", breaks=c(25,50,100,200))+
+  scale_x_discrete(name = "Progenitor cluster", labels =function(x) paste0("p",x))
+p
+```
+
+```{r go_wo_e2m}
+go_to_plot = filter(dfgo, p.adjust < 0.01 & !grepl("Epithel", short_desc)) %>% group_by(cluster) %>%
+              slice_min(n = 2, order_by = p.adjust)
+go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
+
+p = ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point()+ 
+  theme(axis.text.x=element_text(angle=30, hjust=1), axis.title.y = element_blank()) +
+  scale_color_manual(values=clusters, guide="none") + scale_size(name="Genes", breaks=c(25,50,100,200))+
+  scale_x_discrete(name = "Progenitor cluster", labels =function(x) paste0("p",x))
+p
+```
+
+
+```{r cluster_go_overlapping, dev=c("png","pdf")}
+include_all_plot = filter(dfgo, Description %in% go_to_plot$Description & p.adjust < 0.01)
+include_all_plot$short_desc = factor(include_all_plot$short_desc, levels=levels(go_to_plot$short_desc))
+a = ggplot(include_all_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point()+ 
+  theme(axis.text.x=element_text(angle=30, hjust=1), axis.title.y = element_blank()) +
+ scale_color_manual(values=clusters, guide="none") + scale_size(name="Genes", breaks=c(25,50,100,200))+
+  scale_x_discrete(name = "Progenitor cluster", labels =function(x) paste0("p",x))
+a
+```
+
+```{r save}
+if (subset_data == FALSE){
+  write.table(dfgo, here (odir, "ORA_marker_genes.txt"),
+            sep="\t", row.names = F)
+} else if (subset_data){ #if subset, don't save complete analysis
+  #don't write
+}
+```

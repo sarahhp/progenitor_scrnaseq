@@ -1,0 +1,186 @@
+---
+title: "progenitors_initial_plots"
+author: "Sarah Hazell Pickering"
+date: "2026-01-13"
+output: html_document
+---
+
+```{r libs, message=FALSE, warning=FALSE}
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+library(here)
+```
+
+```{r params}
+module = "progenitors"
+dataname = "initial"
+load_data = T
+subset_data = F
+
+rmd_filename = "figure2_progenitors_initial"
+i_am(file.path("figures", paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+```
+
+
+```{r setup_}
+set.seed(8)
+fig_dir = here("figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c('#0A7EA8','#EF5780','#0A8550','#1C31D3','#EE9614','#670F39')
+names(pal) = paste0("S", 1:6)
+clusters = c("#FED439FF", "#709AE1FF", "#8A9197FF", "#D2AF81FF",
+             "#FD7446FF", "#D5E4A2FF", "#197EC0FF", "#46732EFF", "#71D0F5FF")
+names(clusters) = 0:(length(clusters)-1)
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+## Load cluster composition summary
+```{r}
+clu_info = read.delim(here(odir, "cluster_composition.txt"))
+clu_info$seurat_clusters = factor(clu_info$seurat_clusters)
+head(clu_info)
+```
+
+
+## Load marker lists
+```{r}
+clgo = read.delim(here(odir, "ORA_marker_genes.txt"))
+clgo$cluster = factor(clgo$cluster)
+donorgo = read.delim(here(odir, "ORA_donor_marker_genes.txt"))
+```
+
+## load seurat object
+```{r}
+if (subset_data){
+  filt = readRDS(here(odir, "10%_complete_analysis.rds"))
+  Idents(filt) = "seurat_clusters"
+} else{
+  filt = readRDS(here(odir, "complete_analysis.rds"))
+}
+```
+
+## UMAPs
+```{r B_umap_subjects}
+DimPlot(filt, group.by="subject", cols=pal) + theme_hp + labs(title=NULL, colour="Subject")
+```
+
+```{r C_cluster_composition}
+ggplot(clu_info) + geom_bar(stat="identity",aes(y=donor_id, x=n_cells, fill=seurat_clusters), position = "fill") +
+  scale_y_discrete(limits=rev)+ scale_x_continuous(expand = c(0.01, 0))+ 
+ scale_fill_manual(values=clusters, name="Unintegrated\nprogenitor\nclusters", labels=function(x)paste0("u",x)) +
+    coord_cartesian(expand=F) + labs(y="Subject", x="Proportion of cells")
+```
+
+
+```{r D_umap_clusters}
+DimPlot(filt, cols=clusters) + theme_hp + 
+    scale_colour_manual(name="Unintegrated\nprogenitor\nclusters",
+     labels=function(x)paste0("u",x), values=clusters) +theme(legend.title=element_text(size=12))
+```
+
+## Cluster GO
+
+
+```{r E_cluster_go_terms}
+go_to_plot = filter(clgo, p.adjust < 0.01) %>% group_by(cluster) %>%
+              slice_min(n = 2, order_by = p.adjust)
+go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
+
+ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point() + scale_color_manual(values=clusters, guide="none") + labs(y=NULL,size="Gene\nCount")
+
+include_all_plot = filter(clgo, Description %in% go_to_plot$Description & p.adjust < 0.01)
+include_all_plot$short_desc = factor(include_all_plot$short_desc, levels=levels(go_to_plot$short_desc))
+ggplot(include_all_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point() +scale_color_manual(values=clusters, guide="none") + labs(y=NULL,size="Gene\nCount")
+```
+
+## Donor Go
+
+```{r zdonor_go_unique}
+donorgo$cluster = factor(donorgo$cluster, levels=paste0("S",c(1,5,6,2,4,3)))
+go_to_plot = filter(donorgo, p.adjust < 0.01 & !grepl("^HALLMARK", Description)) %>% group_by(cluster) %>%
+              slice_min(n = 3, order_by = tibble(p.adjust, pvalue))
+go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
+
+ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point() + 
+     scale_color_manual(values=pal, guide="none") + labs(y=NULL,size="Gene\nCount")
+
+```
+
+
+```{r zdonor_go_overlapping}
+include_all_plot = filter(donorgo, Description %in% go_to_plot$Description & p.adjust < 0.01)
+include_all_plot$short_desc = factor(include_all_plot$short_desc, levels=levels(go_to_plot$short_desc))
+ggplot(include_all_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count, alpha=Count)) + 
+  geom_point() + scale_color_manual(values=pal, guide="none") + labs(y=NULL,size="Gene\nCount")
+```
+
+
+### reorder dotplot
+Moving common terms tothe bottom of the plot to make it easier to read.  
+```{r F_donor_GO_top3}
+include_all_plot$short_desc = factor(include_all_plot$short_desc, 
+                                     levels=unique(c("Collagen containing extracellular matrix",
+                                                   "Connective tissue development",
+                                                   "Cell substrate junction" ,
+                                                   "Cartilage development",
+                                                   levels(go_to_plot$short_desc))))
+ggplot(include_all_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count, alpha=Count)) + 
+  geom_point()+ scale_color_manual(values=pal[paste0("S",c(1,5,6,2,4,3))], guide="none") + 
+    labs(y=NULL,size="Gene\nCount", alpha="Gene\nCount")
+
+```
+
+# Supplemental figs
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

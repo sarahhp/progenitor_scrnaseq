@@ -7,7 +7,16 @@ output: html_document
 
 # Figure Index
 
-![Figure2B]("analysis/progenitors/figures/progenitors_initial_seurat_analysis/")
+
+## Figure 2
+### Unintegrated progenitor scRNAseq
+
+#### B
+![Figure2B](analysis/progenitors/figures/progenitors_initial_seurat_analysis/umap-2.png)
+![Figure2C](analysis/progenitors/figures/progenitors_initial_seurat_analysis/donor_composition-2.png)
+![Figure2D](analysis/progenitors/figures/progenitors_initial_seurat_analysis/umap-1.png)
+
+![Figure2E]("analysis/progenitors/figures/progenitors_initial_marker_and_go/umap-1.png")
 
 ## Figure 4
 

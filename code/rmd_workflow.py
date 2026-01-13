@@ -52,6 +52,9 @@ INDIR = "data/cellranger/count_no_introns/day0"
 ODIR = "output/progenitors/initial"
 
 rule progenitors_initial:
+    ''' Progenitors scRNAseq initial seurat analysis
+    Status: Complete.    
+    '''
     input:
         in10x = expand("{dir}/{sample}/outs/filtered_feature_bc_matrix/{files}",
                         dir = INDIR,
@@ -76,6 +79,7 @@ rule progenitors_initial:
 
 
 rule pi_markers_and_go:
+    '''Status: Knitted'''
     input:
         rdata = ODIR + "/complete_analysis.rds",
         marker_genes = ODIR + "/marker_genes.txt",
@@ -100,7 +104,7 @@ ODIR = "output/progenitors/integration_trial"
 
 rule progenitors_integration_trial:
     ''' 
-    Status: knitted
+    Status: Knitted
     Harmony, FastMNN and RPCA integrations
     '''
     input:
@@ -122,6 +126,7 @@ include: "run_scvi.py"
 SCVI_DIR = "output/progenitors/scvi_integration"
 
 rule progenitors_scvi:
+    '''Status: in dev'''
     input:
         anndata = SCVI_DIR + "/complete_analysis.scviintegrated.h5ad",
         rmd = PRO_ADIR + "/progenitors_scvi_integration.Rmd"
@@ -157,7 +162,7 @@ ODIR = "output/progenitors/rpca"
 rule progenitors_rpca_integration:
     '''Starting from initial analysis apply optimal integration method 
     and clustering 
-    Status: knitted
+    Status: Complete
     '''
     input:
         rdata = INDIR + "/complete_analysis.rds",
@@ -173,7 +178,24 @@ rule progenitors_rpca_integration:
     shell:
         "{params.cmd}"
               
-        
+ 
+rule rpca_markers_and_go:
+    '''Status: Complete'''
+    input:
+        rdata = ODIR + "/complete_analysis.rds",
+        marker_genes = ODIR + "/marker_genes.txt",
+        gene_sets = expand("data/gene_sets/{file}",
+                            file = ["msigdb.v2024.1.Hs.symbols.gmt",
+                            "abbreviations.txt",
+                            "capitalisations.txt"]),
+        rmd = PRO_ADIR + "/progenitors_rpca_markers_and_GO.Rmd"
+    output:
+        report = PRO_ADIR + "/progenitors_rpca_markers_and_GO.html",
+        go = ODIR + "/ORA_marker_genes.txt",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"      
 
 ##-------------------------------------------------##
 ##        Adipogenesis day 0, day 1 & day3         ##

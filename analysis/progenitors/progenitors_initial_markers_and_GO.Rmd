@@ -130,21 +130,21 @@ rm(molsig)
 ## Cluster GO
 
 ```{r}
-clgo = compareCluster(gene~cluster, data=filter(cluster.markers,p_val_adj < 0.01), 
+res_clgo = compareCluster(gene~cluster, data=filter(cluster.markers,p_val_adj < 0.01), 
                       fun="enricher", TERM2GENE = some.molsig, universe = all.genes)
-head(clgo)[,c(2,4:9)]
-nrow(filter(clgo, p.adjust < 0.01))
-summary(clgo@compareClusterResult$p.adjust)
+head(res_clgo)[,c(2,4:9)]
+nrow(filter(res_clgo, p.adjust < 0.01))
+summary(res_clgo@compareClusterResult$p.adjust)
 
-dotplot(filter(clgo,p.adjust < 0.01), x="cluster", showCategory=2) 
-dotplot(clgo, x="cluster", showCategory=2, includeAll=F) 
-dotplot(clgo, x="cluster", showCategory=3, includeAll=F) 
+dotplot(filter(res_clgo,p.adjust < 0.01), x="cluster", showCategory=2) 
+dotplot(res_clgo, x="cluster", showCategory=2, includeAll=F) 
+dotplot(res_clgo, x="cluster", showCategory=3, includeAll=F) 
 ```
 
 ```{r cluster_go_unique, dev=c("png","pdf")}
-dfgo = as.data.frame(clgo)
-dfgo$short_desc =drama_shorten(dfgo$Description)
-go_to_plot = filter(dfgo, p.adjust < 0.01) %>% group_by(cluster) %>%
+clgo = as.data.frame(res_clgo)
+clgo$short_desc =drama_shorten(clgo$Description)
+go_to_plot = filter(clgo, p.adjust < 0.01) %>% group_by(cluster) %>%
               slice_min(n = 2, order_by = p.adjust)
 go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
 
@@ -155,7 +155,7 @@ p
 `
 
 ```{r cluster_go_overlapping_nohallmark, dev=c("png","pdf")}
-include_all_plot = filter(dfgo, Description %in% go_to_plot$Description & p.adjust < 0.01)
+include_all_plot = filter(clgo, Description %in% go_to_plot$Description & p.adjust < 0.01)
 include_all_plot$short_desc = factor(include_all_plot$short_desc, levels=levels(go_to_plot$short_desc))
 a = ggplot(include_all_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
   geom_point() +scale_color_manual(values=clusters)
@@ -210,21 +210,21 @@ h
 
 ## GO on donor specific genes
 ```{r}
-donorgo = compareCluster(gene~cluster, data=filter(donor.markers,p_val_adj < 0.01),
+res_donorgo = compareCluster(gene~cluster, data=filter(donor.markers,p_val_adj < 0.01),
                          fun="enricher", TERM2GENE = some.molsig, universe = all.genes)
-head(donorgo)[,c(2,4:9)]
+head(res_donorgo)[,c(2,4:9)]
 
-p = dotplot(donorgo, showCategory=3, x="cluster") 
+p = dotplot(res_donorgo, showCategory=3, x="cluster") 
 p + scale_y_discrete(labels=drama_shorten(levels(p$data$Description)))
-p = dotplot(donorgo, showCategory=3, x="cluster", includeAll=F) 
+p = dotplot(res_donorgo, showCategory=3, x="cluster", includeAll=F) 
 p + scale_y_discrete(labels=drama_shorten(levels(p$data$Description)))
 ```
 
 ```{r donor_go_unique, dev=c("png","pdf")}
-dfgo = as.data.frame(donorgo)
-dfgo$short_desc =drama_shorten(dfgo$Description)
-dfgo$cluster = factor(dfgo$cluster, levels=paste0("S",c(1,5,6,2,4,3)))
-go_to_plot = filter(dfgo, p.adjust < 0.01) %>% group_by(cluster) %>%
+donorgo = as.data.frame(res_donorgo)
+donorgo$short_desc =drama_shorten(donorgo$Description)
+donorgo$cluster = factor(donorgo$cluster, levels=paste0("S",c(1,5,6,2,4,3)))
+go_to_plot = filter(donorgo, p.adjust < 0.01) %>% group_by(cluster) %>%
               slice_min(n = 3, order_by = tibble(p.adjust, pvalue))
 go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
 
@@ -235,7 +235,7 @@ p
 
 
 ```{r donor_go_overlapping, dev=c("png","pdf")}
-include_all_plot = filter(dfgo, Description %in% go_to_plot$Description & p.adjust < 0.01)
+include_all_plot = filter(donorgo, Description %in% go_to_plot$Description & p.adjust < 0.01)
 include_all_plot$short_desc = factor(include_all_plot$short_desc, levels=levels(go_to_plot$short_desc))
 a = ggplot(include_all_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count, alpha=Count)) + 
   geom_point() + scale_color_manual(values=pal)
