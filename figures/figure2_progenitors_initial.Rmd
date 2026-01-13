@@ -5,6 +5,8 @@ date: "2026-01-13"
 output: html_document
 ---
 
+# Figure 2
+
 ```{r libs, message=FALSE, warning=FALSE}
 library(Seurat)
 library(dplyr)
@@ -24,7 +26,7 @@ odir = here("output", module, dataname)
 ```
 
 
-```{r setup_}
+```{r setup}
 set.seed(8)
 fig_dir = here("figures", rmd_filename)
 if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
@@ -94,33 +96,52 @@ DimPlot(filt, cols=clusters) + theme_hp +
 ```
 
 ## Cluster GO
+Not using the hallmark and KEGG gene set to avoid redundancy
 
+```{r go_replace}
+phrases= read.delim(here("data/gene_sets/abbreviations.txt"))
+recap= read.delim(here("data/gene_sets/capitalisations.txt"))
+```
+
+```{r abrev_go}
+drama_shorten = function(ont) {
+  for (x in 1:nrow(phrases)){
+    ont = gsub( phrases$phrase[x],phrases$abbreviation[x], ont, ignore.case = T)
+  }
+  a = abbreviate(gsub("_"," ", gsub("^[[:alpha:]]*_","",tolower(ont))),minlength=41, dot=T, named = F)
+  a = stringr::str_to_sentence(a)
+  for (i in 1:nrow(recap))
+    a = gsub(sprintf("\\b%s\\b", recap$lowercase[i]),recap$capital[i],a, ignore.case = T)
+  return(a)
+}
+```
 
 ```{r E_cluster_go_terms}
-go_to_plot = filter(clgo, p.adjust < 0.01) %>% group_by(cluster) %>%
+clgo$short_desc = drama_shorten(clgo$Description)
+go_to_plot = filter(clgo, p.adjust < 0.01 & !grepl("^(HALLMARK|KEGG)", Description)) %>% group_by(cluster) %>%
               slice_min(n = 2, order_by = p.adjust)
 go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
-
 ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
-  geom_point() + scale_color_manual(values=clusters, guide="none") + labs(y=NULL,size="Gene\nCount")
+  geom_point() + scale_color_manual(values=clusters, guide="none") + labs(y=NULL,size="Genes")
 
 include_all_plot = filter(clgo, Description %in% go_to_plot$Description & p.adjust < 0.01)
 include_all_plot$short_desc = factor(include_all_plot$short_desc, levels=levels(go_to_plot$short_desc))
 ggplot(include_all_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
-  geom_point() +scale_color_manual(values=clusters, guide="none") + labs(y=NULL,size="Gene\nCount")
+  geom_point() +scale_color_manual(values=clusters, guide="none") + labs(y=NULL,size="Genes")
 ```
 
 ## Donor Go
 
 ```{r zdonor_go_unique}
 donorgo$cluster = factor(donorgo$cluster, levels=paste0("S",c(1,5,6,2,4,3)))
-go_to_plot = filter(donorgo, p.adjust < 0.01 & !grepl("^HALLMARK", Description)) %>% group_by(cluster) %>%
+donorgo$short_desc = drama_shorten(donorgo$Description)
+go_to_plot = filter(donorgo, p.adjust < 0.01 & !grepl("^(HALLMARK|KEGG)", Description)) %>% group_by(cluster) %>%
               slice_min(n = 3, order_by = tibble(p.adjust, pvalue))
 go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
 
 ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
   geom_point() + 
-     scale_color_manual(values=pal, guide="none") + labs(y=NULL,size="Gene\nCount")
+     scale_color_manual(values=pal, guide="none") + labs(y=NULL,size="Genes")
 
 ```
 
@@ -129,7 +150,7 @@ ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) +
 include_all_plot = filter(donorgo, Description %in% go_to_plot$Description & p.adjust < 0.01)
 include_all_plot$short_desc = factor(include_all_plot$short_desc, levels=levels(go_to_plot$short_desc))
 ggplot(include_all_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count, alpha=Count)) + 
-  geom_point() + scale_color_manual(values=pal, guide="none") + labs(y=NULL,size="Gene\nCount")
+  geom_point() + scale_color_manual(values=pal, guide="none") + labs(y=NULL,size="Genes")
 ```
 
 
@@ -144,8 +165,7 @@ include_all_plot$short_desc = factor(include_all_plot$short_desc,
                                                    levels(go_to_plot$short_desc))))
 ggplot(include_all_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count, alpha=Count)) + 
   geom_point()+ scale_color_manual(values=pal[paste0("S",c(1,5,6,2,4,3))], guide="none") + 
-    labs(y=NULL,size="Gene\nCount", alpha="Gene\nCount")
-
+    labs(y=NULL)
 ```
 
 # Supplemental figs

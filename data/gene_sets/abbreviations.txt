@@ -22,5 +22,7 @@ protein_(containing_)?complex	complex
 regulating_ANTI_OXIDANT	&_ANTIOXIDANT
 response_to_topologically_incorrect_protein	topologically_incorrect_protein_response
 structure_organization	structure
-the_citric_acid
+the_citric_acid	
 transforming_growth_factor_beta	TGFb
+positive_regulation_of	Pos._reg.
+Extracellular_matrix_structural	ECM_structural

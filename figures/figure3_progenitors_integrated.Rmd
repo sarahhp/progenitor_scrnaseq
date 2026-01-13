@@ -1,0 +1,153 @@
+---
+title: "progenitors_integrated_plots"
+author: "Sarah Hazell Pickering"
+date: "2026-01-13"
+output: html_document
+---
+
+# Figure 3
+
+
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(Seurat)
+library(dplyr)
+library(ggbeeswarm)
+library(ggplot2)
+library(ggsci)
+library(here)
+library(tidyr)
+```
+
+```{r params}
+module = "progenitors"
+dataname = "rpca"
+load_data = T #Loading initial seurat analysis
+subset_data = F
+
+rmd_filename = "figure3_progenitors_integrated"
+i_am(file.path("figures", paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c('#0A7EA8','#EF5780','#0A8550','#1C31D3','#EE9614','#670F39')
+clusters = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00","#AC8AD0")
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+##load cluster info
+```{r}
+clu_info = read.delim(here(odir, "cluster_composition.txt"), colClasses = list(seurat_clusters="factor"))
+clu_info = group_by(clu_info,seurat_clusters) %>% mutate( sd_cells_per_donor=sd(cells_per_donor))
+head(clu_info)
+```
+
+##load marker genes and go terms
+
+```{r}
+cluster.markers = read.delim(here(odir,"marker_genes.txt"))
+cluster.markers$cluster = factor(cluster.markers$cluster, levels=0:max(as.integer(cluster.markers$cluster)))
+clgo = read.delim(here(odir, "ORA_marker_genes.txt"))
+clgo$cluster = factor(clgo$cluster)
+```
+
+
+##load seurat object
+
+```{r load_data}
+if (subset_data){
+  filt = readRDS(here(odir, "10%_complete_analysis.rds"))
+} else{
+  filt = readRDS(here(odir, "complete_analysis.rds"))
+}
+filt
+colnames(filt@meta.data) 
+table(filt$seurat_clusters)
+```
+
+## A Cluster UMAPs
+
+```{r A_umap}
+DimPlot(filt, reduction = "umap",  group.by="seurat_clusters", cols = clusters) + theme_hp +
+    scale_color_manual(values=clusters, name = "Progenitor \ncluster", labels =function(x) paste0("p",x)) +
+    labs(title=NULL)
+DimPlot(filt, reduction = "umap",  group.by="seurat_clusters", cols = clusters, 
+        split.by = "subject", ncol=3) + theme_hp  + 
+  scale_color_manual(values=clusters, name = "Progenitor \ncluster", labels =function(x) paste0("p",x))+ 
+    labs(title=NULL)
+```
+## B marker genes
+
+```{r marker_genes}
+top.markers =  cluster.markers %>%
+    group_by(cluster) %>% filter(p_val_adj < 0.01) %>%
+    slice_max(n=2, order_by = avg_log2FC*pct.1)
+top.markers
+
+top.markers$gene = factor(top.markers$gene, levels=rev(unique(top.markers$gene)))
+overlap.to.plot = filter(cluster.markers, gene %in% top.markers$gene)
+overlap.to.plot$gene = factor(overlap.to.plot$gene, levels=levels(top.markers$gene))
+
+
+ggplot(overlap.to.plot, aes(y=gene, size=abs(avg_log2FC), color=cluster,
+                    x=cluster)) + 
+  geom_point()  + 
+  scale_color_manual(values=clusters, guide="none") +scale_size_continuous(name="|log2FC|")+
+  scale_x_discrete(name = "Progenitor cluster", labels =function(x) paste0("p",x)) +
+    labs(y="Gene name")
+```
+
+## C GO terms
+
+```{r cluster_go_unique, dev=c("png","pdf")}
+go_to_plot = filter(clgo, p.adjust < 0.01 & !grepl("^(KEGG)", Description)) %>% group_by(cluster) %>%
+              slice_min(n = 3, order_by = p.adjust)
+go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
+
+ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point()+ 
+  theme(axis.text.x=element_text(angle=30, hjust=1), axis.title.y = element_blank()) +  
+  scale_color_manual(values=clusters, guide="none") + scale_size(name="Genes", breaks=c(25,50,100,200))+
+  scale_x_discrete(name = "Progenitor cluster", labels =function(x) paste0("p",x))
+```
+
+```{r go_wo_e2m}
+go_to_plot = filter(clgo, p.adjust < 0.01 & !grepl("Epithel", short_desc)) %>% group_by(cluster) %>%
+              slice_min(n = 3, order_by = p.adjust)
+go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
+
+ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point()+ 
+  theme( axis.title.y = element_blank()) +
+  scale_color_manual(values=clusters, guide="none") + scale_size(name="Genes", breaks=c(25,50,100,200))+
+  scale_x_discrete(name = "Progenitor cluster", labels =function(x) paste0("p",x))
+```
+
+## D cluster composition
+
+
+```{r D_cluster_composition_boxplot}
+ggplot(clu_info, aes(x=seurat_clusters,  y=cells_per_donor, )) + 
+  geom_boxplot(outlier.shape = NA, fill='lightgrey') +  geom_beeswarm(aes(colour=donor_id), size=2, cex=2)+
+  scale_colour_manual(values=pal) + scale_x_discrete(labels=function(x) paste0("p",x)) +
+    labs(colour="Subject",y="Proportion of cells", x="Progenitor cluster")
+```

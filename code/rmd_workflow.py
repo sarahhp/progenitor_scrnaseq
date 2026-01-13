@@ -68,7 +68,7 @@ rule progenitors_initial:
          #               dir = ODIR,
           #              sample =  expand("day0_subjectS{s}", s=range()),
         report = PRO_ADIR + "/progenitors_initial_seurat_analysis.html",
-        #raw_rdata = ODIR + "unfiltered_object.rds", #if first time running only
+        #raw_rdata = ODIR + "/unfiltered_object.rds", #if first time running only
         rdata = ODIR + "/complete_analysis.rds",
         subset_rdata = ODIR + "/10%_complete_analysis.rds",
         marker_genes = ODIR + "/marker_genes.txt",
@@ -98,13 +98,28 @@ rule pi_markers_and_go:
     shell:
         "{params.cmd}"
 
+rule figure2:
+    '''Status: Knitted'''
+    input:
+        rdata = ODIR + "/complete_analysis.rds",
+        cluster_info = ODIR + "/cluster_composition.txt",
+        go = ODIR + "/ORA_marker_genes.txt",
+        donor_go = ODIR + "/ORA_donor_marker_genes.txt",
+        rmd = "figures/figure2_progenitors_initial.Rmd"
+    output:
+        report = "figures/figure2_progenitors_initial.html",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"
+
 ## trial integration with different methods
 INDIR = ODIR
 ODIR = "output/progenitors/integration_trial"
 
 rule progenitors_integration_trial:
     ''' 
-    Status: Knitted
+    Status: Complete
     Harmony, FastMNN and RPCA integrations
     '''
     input:
@@ -142,7 +157,7 @@ rule progenitors_scvi:
 #Trial clustering at different resolutions
 rule progenitors_rpca_clustree:
     ''' 
-    Status: knitted
+    Status: Complete
     Harmony, FastMNN and RPCA integrations
     '''
     input:
@@ -197,6 +212,24 @@ rule rpca_markers_and_go:
     shell:
         "{params.cmd}"      
 
+rule figure3:
+    '''Status: Complete'''
+    input:
+        rdata = ODIR + "/complete_analysis.rds",
+        marker_genes = ODIR + "/marker_genes.txt",
+        go = ODIR + "/ORA_marker_genes.txt",
+        cluster_info = ODIR + "/cluster_composition.txt",
+        rmd = "figures/figure3_progenitors_integrated.Rmd"
+    output:
+        report = "figures/figure3_progenitors_integrated.html"
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"  
+        
+         
+
+
 ##-------------------------------------------------##
 ##        Adipogenesis day 0, day 1 & day3         ##
 ##                   sc RNA-seq                    ##
@@ -207,6 +240,7 @@ INDIR = "data/cellranger/count_r2_only"
 ODIR = "output/adipogenesis/initial_r2_only"
 
 rule initial_r2_only:
+    '''Status: complete'''
     input:
         in10x = expand("{dir}/{sample}/outs/filtered_feature_bc_matrix/{files}",
                         dir = INDIR,
@@ -214,6 +248,7 @@ rule initial_r2_only:
                                     "asc_day0",
                                     "beige_day1", "beige_day1_rep2","beige_day3"],
                         files = ["barcodes.tsv.gz","features.tsv.gz","matrix.mtx.gz"]),
+        rmd = ADIR + "/adipogenesis_initial_r2_only.Rmd"
     output:
         bpcells = directory(expand("{dir}/bpcells/{sample}",
                         dir = ODIR,
@@ -221,32 +256,37 @@ rule initial_r2_only:
                                     "asc_day0",
                                     "beige_day1", "beige_day1_rep2","beige_day3"])),
         report = ADIR + "/adipogenesis_initial_r2_only.html",
-        raw_rdata = ODIR + "unfiltered_object.rds",
+        raw_rdata = ODIR + "/unfiltered_object.rds",
         rdata = ODIR + "/complete_analysis.rds",
         subset_rdata = ODIR + "/10%_complete_analysis.rds",
         marker_genes = ODIR + "/marker_genes.txt",
         GO_table =  ODIR +"/ORA_marker_genes.txt",
         cluster_info = ODIR + "/cluster_composition.txt",
-    script:
-        ADIR + "/adipogenesis_initial_r2_only.Rmd"
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"     
+        
 
 INDIR = ODIR
 ODIR = "output/adipogenesis/white_only_initial"
      
 rule white_only_initial:
-    ''' Not yet migrated '''
+    ''' Status: Not yet migrated '''
     input:
-        rdata = INDIR + "/complete_analysis.rds"
+        rdata = INDIR + "/complete_analysis.rds",
+        rmd =  ADIR + "/white_only_initial.Rmd"
     output:
         report = ADIR + "/white_only_initial.html",
-        raw_rdata = ODIR + "unfiltered_object.rds",
         rdata = ODIR + "/complete_analysis.rds",
         subset_rdata = ODIR + "/10%_complete_analysis.rds",
         marker_genes = ODIR + "/marker_genes.txt",
         GO_table =  ODIR +"/ORA_marker_genes.txt",
         cluster_info = ODIR + "/cluster_composition.txt",
-    script:
-        ADIR + "/white_only_initial.Rmd"
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"  
 
 ##-------------------------------------------------##
 ##      Adipogenesis - white only downsample       ##
@@ -256,19 +296,21 @@ rule white_only_initial:
 ODIR = "output/adipogenesis/white_only_downsample"
 
 rule white_only_downsample:
+    '''Status: complete'''
     input:
-        rdata = INDIR + "/complete_analysis.rds"
+        rdata = INDIR + "/complete_analysis.rds",
+        rmd = ADIR + "/white_only_downsample.Rmd"
     output:
         report = ADIR + "/white_only_downsample.html",
-        raw_rdata = ODIR + "unfiltered_object.rds",
         rdata = ODIR + "/complete_analysis.rds",
         subset_rdata = ODIR + "/10%_complete_analysis.rds",
         marker_genes = ODIR + "/marker_genes.txt",
         GO_table =  ODIR +"/ORA_marker_genes.txt",
         cluster_info = ODIR + "/cluster_composition.txt",
-    script:
-        ADIR + "/white_only_downsample.Rmd"
-        
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"          
 #already migrated: clustree           
                 
                 
