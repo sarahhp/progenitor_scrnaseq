@@ -1,0 +1,29 @@
+---
+title: "Figure_index"
+author: "Sarah Hazell Pickering"
+date: "2026-01-13"
+output: html_document
+---
+
+# Figure Index
+
+![Figure2B]("analysis/progenitors/figures/progenitors_initial_seurat_analysis/")
+
+## Figure 4
+
+![Figure4B](docs/figure/white_only_downsample_markers.Rmd/umap-1.png)
+![Figure4D](docs/figure/white_only_downsample_markers.Rmd/umap-2.png)
+![Figure4x]("docs/figure/white_only_downsample_emont.Rmd/filt_emont_cell_type-1.png")
+![Figure4x]("output/adipogenesis/white_only_downsample/lazarescu/plots/lazarescu_celltype_with_uncertainty.png")
+
+
+## Figure 6
+
+
+![Figure 6F-velocity]("docs/figure/white_only_fastmnn_velociraptor_dynamical.Rmd/tsne_velocity_prog_cols-1.png)
+
+![Figure 6F-monocle]("docs/figure/white_only_fastmnn_progenitor_trajectory_markers.Rmd/tsne_monocle_prog_cols-1.png")
+
+![Figure 6E]("docs/figure/white_only_fastmnn_progenitor_trajectory_markers/velocity_monocle_flipped-1.png")
+
+

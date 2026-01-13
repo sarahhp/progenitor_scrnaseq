@@ -2,7 +2,10 @@ name: sceasy
 channels:
   - conda-forge
   - bioconda
+  - defaults
 dependencies:
-  - r-sceasy
   - anndata
+  - r-sceasy
   - loompy
+  - ca-certificates
+  - openssl

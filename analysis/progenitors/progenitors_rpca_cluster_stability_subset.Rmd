@@ -49,7 +49,7 @@ theme_hp = theme_classic(base_size = 15) +
         axis.ticks = element_line(linewidth = 0.25),
         strip.background = element_blank())
 theme_set(theme_hp)
-pal = c("#DA1819", "#00AED1", "#434D51","#EBB400","#691A93","#3AAD00")
+pal = c("#0A7EA8","#EF5780","#0A8550","#1C31D3","#EE9614","#670F39")
 clusters = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00","#AC8AD0", tvthemes::gravityFalls_pal()(12))
 spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
 ```

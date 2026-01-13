@@ -48,8 +48,8 @@ theme_hp = theme_classic(base_size = 15) +
         axis.ticks = element_line(linewidth = 0.25),
         strip.background = element_blank())
 theme_set(theme_hp)
-pal = c("#DA1819", "#00AED1", "#434D51","#EBB400","#691A93","#3AAD00")
-clusters = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00","#AC8AD0", tvthemes::gravityFalls_pal()(5))
+pal = c("#0A7EA8","#EF5780","#0A8550","#1C31D3","#EE9614","#670F39")
+clusters = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00","#AC8AD0", tvthemes::gravityFalls_pal()(10))
 spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
 ```
 
@@ -156,6 +156,12 @@ ggplot(filter(composition, seurat_clusters %in% c(0,1,2,3))) + geom_bar(stat="id
    scale_fill_manual(values=clusters)
 ```
 
+## save
+```{r}
+if(!subset_data){
+    saveRDS(filt, here(odir,"multiple_resolutions.rds"))
+}
+```
 ## Markers on 0.5 resolution
 
 ```{r }

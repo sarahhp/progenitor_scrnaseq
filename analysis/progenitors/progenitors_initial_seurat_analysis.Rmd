@@ -1,11 +1,7 @@
 ---
-title: "Progenitor seurat qc and analysis"
+title: "Progenitor Initial QC and Analysis"
 output: html_document
 ---
-
-
-previous code: mito_on_mad_take2_full
-now updating seuratv5
 
 ```{r libs, message=FALSE, warning=FALSE}
 library(BPCells)
@@ -24,7 +20,7 @@ library(patchwork)
 ```{r params}
 module = "progenitors"
 dataname = "initial"
-load_data = F #Load data from previous analysis?
+load_data = T #Load data from previous analysis?
 subset_data = F #subset data to 10% total cells?
 
 rmd_filename = "progenitors_initial_seurat_analysis"
@@ -52,7 +48,7 @@ theme_hp = theme_classic(base_size = 15) +
         axis.ticks = element_line(linewidth = 0.25),
         strip.background = element_blank())
 theme_set(theme_hp)
-pal = c("#DA1819", "#00AED1", "#434D51","#EBB400","#691A93","#3AAD00")
+pal = c("#0A7EA8","#EF5780","#0A8550","#1C31D3","#EE9614","#670F39")
 clusters = c("#FED439FF", "#709AE1FF", "#8A9197FF", "#D2AF81FF",
              "#FD7446FF", "#D5E4A2FF", "#197EC0FF", "#46732EFF", "#71D0F5FF")
 spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
@@ -99,6 +95,7 @@ head(aggr@meta.data) #auto metadata
 ```
 
 
+
 ```{r}
 aggr$subject = gsub("_.*","", gsub("day0.subject","",colnames(aggr)))
 Idents(aggr) = "subject"
@@ -107,6 +104,14 @@ table(Idents(aggr))
 aggr <- JoinLayers(aggr)
 aggr
 ```
+
+```{r}
+if(subset_data){
+    aggr = subset(aggr, downsample=1000)
+    aggr
+}
+```
+
 
 ## Quality control
 
@@ -459,7 +464,7 @@ if (subset_data == FALSE){
   saveRDS(sub,here(odir,"10%_complete_analysis.rds"))
 } else if (subset_data){ #if subset, don't save complete analysis
   saveRDS(filt,here(odir, "10%_subset_analysis.rds"))
-  write.table(cluster.markers, file.path(odir,dataname, "10%_subset_marker_genes.txt"),
+  write.table(cluster.markers, here(odir, "10%_subset_marker_genes.txt"),
             sep="\t", row.names = F)
 }
 ```

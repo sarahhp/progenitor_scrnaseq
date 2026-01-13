@@ -5,7 +5,7 @@ library(reticulate)
 library(here); i_am("code/rscript_sceasy.R")
 use_condaenv('sceasy')
 
-input_file = snakemake@input[[1]] 
+input_file = snakemake@input[[1]]
 output_file = snakemake@output[[1]]
 
 print("Loading seurat object")
@@ -22,7 +22,7 @@ print("Reassigning")
 DefaultAssay(seurat_object) = "RNA3"
 seurat_object[["RNA"]] = NULL
 seurat_object = RenameAssays(seurat_object, RNA3="RNA")
-cat("Converting full object and saving as")
+cat("Converting full object and saving as ")
 cat(output_file)
 cat("\n")
 sceasy::convertFormat(seurat_object, from="seurat", to="anndata",

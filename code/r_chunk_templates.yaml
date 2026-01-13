@@ -47,10 +47,10 @@ themes_block:
 
 categories:
   bulk:
-    pal: 'c("#DA1819", "#00AED1", "#434D51", "#EBB400", "#691A93", "#3AAD00")'
+    pal: 'c("#0A7EA8","#EF5780","#0A8550","#1C31D3","#EE9614","#670F39")'
     clusters: 'ggsci::pal_simpsons()(12)[c(1:7, 9:15)]'
   progenitors:
-    pal: 'c("#1B9E77", "#D95F02", "#7570B3", "#E7298A", "#66A61E", "#E6AB02")'
+    pal: 'c("#0A7EA8","#EF5780","#0A8550","#1C31D3","#EE9614","#670F39")'
     clusters: 'ggsci::pal_simpsons()(12)[c(1:7, 9:15)]'
   adipogenesis:
     pal: 'c("#B3B3B3", "#A0D86F", "#1F78B4")'
@@ -67,6 +67,7 @@ strings_to_replace:
     here(odir,dataname: "here(odir"
     here(odir, dataname: "here(odir"
     figdir: "fig_dir"
+    pal = c("#DA1819", "#00AED1", "#434D51","#EBB400","#691A93","#3AAD00"): "pal = c('#0A7EA8','#EF5780','#0A8550','#1C31D3','#EE9614','#670F39')"
 
 go_blocks:
   type: "static"

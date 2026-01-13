@@ -12,3 +12,6 @@ data/scafe/count
 output/*/*/*.rds
 output/*.rds
 .snakemake
+logs
+screenlog*
+

@@ -6,42 +6,47 @@ output: html_document
 ---
 
 
-```{r params}
-module="progenitors"
-dataname = "scvi_integration"
-library(here); i_am(file.path("analysis",module,paste(module,sep="_",
-                                               paste0(dataname, ".Rmd"))))
-indir = here("output", module, "initial")
-odir = here("output", module, dataname) 
 
-load_data = T #Loading initial seurat analysis
-subset_data =  F
-resolution = 0.3
-
-if (!dir.exists(odir)){dir.create(odir, recursive = T)}
-```
-
-```{r libs, warning=F, message=F, echo=T}
+```{r libs, message=FALSE, warning=FALSE}
+library(Seurat)
 library(dplyr)
 library(ggplot2)
 library(ggsci)
+library(here)
+```
 
-library(Seurat)
-#library(BPCells)
-#library(SeuratWrappers) #required for fastMNN
+```{r params}
+module = "progenitors"
+dataname = "scvi_integration"
+load_data = T #Loading initial seurat analysis
+subset_data = F
+
+rmd_filename = "progenitors_scvi_integration"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+indir = here("output", module, "initial")
+resolution = 0.3
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
 ```
 
 
 ```{r themes}
-theme_hp = theme_classic(base_size=15) + 
-		  theme(axis.line = element_line(linewidth = 0.25),
-		        axis.ticks = element_line(linewidth=0.25),
-		        strip.background = element_blank(), # remove boxes around facet labels
-		        )
-		#set for all ggplots
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
 theme_set(theme_hp)
-knitr::opts_chunk$set(dev=c('png','pdf'))
-pal = c("#DA1819", "#00AED1", "#434D51","#EBB400","#691A93","#3AAD00")
+pal = c("#0A7EA8","#EF5780","#0A8550","#1C31D3","#EE9614","#670F39")
 clusters = ggsci::pal_simpsons()(12)[c(1:7,9:15)]
 ```
 

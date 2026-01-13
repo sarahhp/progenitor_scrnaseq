@@ -29,7 +29,7 @@ rule seurat_to_anndata:
                 dir = OUT,
                 dataname=DATANAME)
     script:
-        "convert_rds_to_AnnData.R"
+        "convert_seurat_to_anndata.R"
 
 rule scvi:
     input:
