@@ -266,33 +266,12 @@ rule initial_r2_only:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
         "{params.cmd}"     
-        
-
-INDIR = ODIR
-ODIR = "output/adipogenesis/white_only_initial"
-     
-rule white_only_initial:
-    ''' Status: Not yet migrated '''
-    input:
-        rdata = INDIR + "/complete_analysis.rds",
-        rmd =  ADIR + "/white_only_initial.Rmd"
-    output:
-        report = ADIR + "/white_only_initial.html",
-        rdata = ODIR + "/complete_analysis.rds",
-        subset_rdata = ODIR + "/10%_complete_analysis.rds",
-        marker_genes = ODIR + "/marker_genes.txt",
-        GO_table =  ODIR +"/ORA_marker_genes.txt",
-        cluster_info = ODIR + "/cluster_composition.txt",
-    params:
-        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
-    shell:
-        "{params.cmd}"  
 
 ##-------------------------------------------------##
 ##      Adipogenesis - white only downsample       ##
 ##-------------------------------------------------##
 
-#INDIR = ODIR
+INDIR = ODIR
 ODIR = "output/adipogenesis/white_only_downsample"
 
 rule white_only_downsample:

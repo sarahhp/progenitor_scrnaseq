@@ -14,4 +14,4 @@ output/*.rds
 .snakemake
 logs
 screenlog*
-
+analysis/*.pdf
