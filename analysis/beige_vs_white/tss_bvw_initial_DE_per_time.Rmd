@@ -1,0 +1,296 @@
+---
+title: "DE_per_time"
+author: "Sarah Hazell Pickering"
+date: "2025-02-11"
+output: html_document
+---
+
+TSS analysis bvw initial
+
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(RColorBrewer)
+library(Seurat)
+library(clusterProfiler)
+library(dplyr)
+library(enrichplot)
+library(ggplot2)
+library(ggrepel)
+library(ggsci)
+library(here)
+library(tidyr)
+```
+
+```{r params}
+module = "beige_vs_white"
+dataname = "tss_bvw_initial"
+load_data = T #loading data
+subset_data = F
+
+rmd_filename = "tss_bvw_initial_DE_per_time"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486","#E31A1C")
+clusters = #ggsci::pal_simpsons()(13)[c(1:7,9:13)]
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+
+```{r params}
+module="adipogenesis"
+dataname = "tss_bvw_initial"
+library(here); i_am(file.path("analysis", paste0(dataname,".Rmd")))
+
+odir = here("output", module, dataname) 
+
+load_data = T #loading data 
+subset_data = F
+```
+
+```{r libs, warning=F, message=F, echo=F}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggsci)
+library(ggrepel)
+library(Seurat)
+library(BPCells)
+library(RColorBrewer)
+library(clusterProfiler)
+library(enrichplot)
+```
+
+```{r}
+pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486","#E31A1C")
+clusters = #ggsci::pal_simpsons()(13)[c(1:7,9:13)]
+  tvthemes::gravityFalls_pal()(13)
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
+#define new theme
+theme_hp = theme_classic(base_size=15) + 
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth=0.25),
+        strip.background = element_blank(), # remove boxes around facet labels
+        )
+#set for all ggplots
+theme_set(theme_hp)
+knitr::opts_chunk$set(dev=c("png","pdf"))
+```
+
+
+## Read data
+
+```{r}
+if (subset_data){
+  sbs = readRDS(here(odir, "10%_complete_analysis.rds"))
+} else {
+  sbs = readRDS(here(odir, "complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+sbs$cond.time = factor(sbs$cond.time, levels=c("white.day3","white.day1","asc.day0","beige.day1","beige.day3"))
+Idents(sbs) = "cond.time"
+sbs
+table(Idents(sbs))
+```
+
+```{r}
+DimPlot(sbs, cols= pal, shuffle=T)
+```
+
+Formatting for TSS ids so we can show them in a shorter form on the volcano plot for e.g. 
+gene_name is used on the plot.  
+MT loci have multple genes per TSS so I removed the additional r1@MT- and just show additional MT gene names with commas. 
+  e.g. P:r1@MT-ND2,r1@MT-CO1,r1@MT-TI,r1@MT-TM,r1@MT-TW is shortned to P:r1@MT-ND2,CO1,TI,TM,TW
+
+```{r}
+format_tss_ids = function(tss_id){
+  df = data.frame(tss_id=tss_id)
+  df =  mutate(df, 
+         simple_id = gsub("r[0-9]*@ADDG[0-9M]*\\.[A-Z],","",
+                        gsub(",r[0-9]*@ADDG[0-9M]*\\.[A-Z]$","",tss_id)),
+         feature_name = if_else(grepl("@MT-.*,r[0-9]*@MT-",tss_id), 
+                             gsub(",r1@MT-",",", simple_id),#compress MT loci
+                              gsub("@ADDG.{8}","@..", simple_id)),
+         #for GO analysis need gene name; pick first, unless it has an obvious no symbol
+         best_gene_name = gsub(",.*","",gsub("[PD]:r[0-9]*@((MIR|AL|LINC|FP)[0-9\\.-]*,r[0-9]*@)?","", feature_name)),
+         gene_names = gsub("([DP]:)?r[0-9]*@", "", simple_id),
+         proximity = gsub(":r[0-9]*@.*", "", simple_id)
+         )
+  return (df)
+}
+all.genes = format_tss_ids(row.names(sbs)) 
+head(all.genes)
+#test cases
+all.genes[grep("LINC00339", all.genes$tss_id),]
+all.genes[grep("MT-CO2", all.genes$tss_id),]
+all.genes[grep("MTCO", all.genes$tss_id),]
+```
+
+Adding some sorting information for DE analysis; the condition, the tss_ids from above and sorting the output by average logFC (with significant hits at the top).  
+
+```{r}
+de_formatting = function(df){
+  df = bind_cols(df, format_tss_ids(rownames(df)))
+   df = mutate(df, 
+          sig=if_else(p_val_adj < 0.01 & 
+                (pct.1 + pct.2) > 0.2 & abs(avg_log2FC) > 0.25,
+                "sig","not_sig"), 
+         condition = if_else(avg_log2FC > 0, "beige", "white"),
+         sig_cond = if_else(sig == "not_sig", "not_sig",
+                            if_else(avg_log2FC > 0, "beige", "white")
+                            ))%>%
+  arrange(sig == "not_sig", desc(abs(avg_log2FC)))
+   return(df)
+}
+```
+
+
+## Day3
+```{r}
+day3_test = FindMarkers(sbs, ident.1="beige.day3",ident.2="white.day3")
+day3_test = de_formatting(day3_test)
+table(day3_test$sig_cond)
+head(day3_test)
+```
+
+
+```{r day3_volcano_all}
+ggplot(day3_test, aes(x=avg_log2FC, y=-log10(p_val), colour=sig_cond)) + geom_point(size=0.5) + 
+  geom_text_repel(data = slice_min(day3_test, n=20, order_by = p_val), aes(label=feature_name), show.legend = F) + 
+  scale_colour_manual(values=c(pal[5],"black",pal[1])) + guides(colour = guide_legend(override.aes = list(size = 2)))  +
+  ggtitle("day3") + coord_cartesian(x=c(-1,1))
+```
+
+
+### Show only proximal elements
+
+```{r day3_volcano_proximal}
+ggplot(filter(day3_test, proximity=="P"), aes(x=avg_log2FC, y=-log10(p_val), colour=sig_cond)) + geom_point(size=0.5) + 
+  geom_text_repel(data = filter(day3_test, proximity=="P" ) %>% slice_min(n=10, order_by = p_val), 
+                  aes(label=feature_name), show.legend = F) + 
+  scale_colour_manual(values=c(pal[5],"black",pal[1])) + guides(colour = guide_legend(override.aes = list(size = 2)))  +
+  ggtitle("day3") + coord_cartesian(x=c(-1,1))
+
+ggplot(filter(day3_test, proximity=="P"), aes(x=avg_log2FC, y=-log10(p_val), colour=sig_cond)) + geom_point(size=0.5) + 
+  geom_text_repel(data = filter(day3_test, proximity=="P" ) %>% slice_min(n=20, order_by = p_val), 
+                  aes(label=feature_name), show.legend = F) + 
+  scale_colour_manual(values=c(pal[5],"black",pal[1])) + guides(colour = guide_legend(override.aes = list(size = 2)))  +
+  ggtitle("day3") + coord_cartesian(x=c(-1,1))
+
+```
+
+
+
+## day 1
+```{r}
+day1_test = FindMarkers(sbs, ident.1="beige.day1",ident.2="white.day1")
+day1_test = de_formatting(day1_test)
+table(day1_test$sig_cond)
+head(day1_test, n=20)
+```
+
+
+
+```{r day1_volcano}
+ggplot(day1_test, aes(x=avg_log2FC, y=-log10(p_val), colour=sig_cond)) + geom_point(size=0.5) + 
+  geom_text_repel(data = slice_min(day1_test, n=15, order_by = p_val), aes(label=feature_name)) + 
+  scale_colour_manual(values=c(pal[4],"black",pal[2]))+ guides(colour = guide_legend(override.aes = list(size = 2))) +
+  ggtitle("day1")+ coord_cartesian(x=c(-2,2))
+
+ggplot(day1_test, aes(x=avg_log2FC, y=-log10(p_val), colour=sig_cond)) + geom_point(size=0.5) + 
+  geom_text_repel(data = slice_min(day1_test, n=30, order_by = p_val), aes(label=feature_name)) + 
+  scale_colour_manual(values=c(pal[4],"black",pal[2])) + guides(colour = guide_legend(override.aes = list(size = 2))) +
+  ggtitle("day1 zoom") + coord_cartesian(x=c(-1,1), y=c(100, 150))
+
+ggplot(day1_test, aes(x=avg_log2FC, y=-log10(p_val), colour=sig_cond)) + geom_point(size=0.5) + 
+  geom_text_repel(data = slice_min(day1_test, n=70, order_by = p_val), aes(label=feature_name)) + 
+  scale_colour_manual(values=c(pal[4],"black",pal[2])) + guides(colour = guide_legend(override.aes = list(size = 2))) +
+  ggtitle("day1 zoom") + coord_cartesian(x=c(-1,1), y=c(0, 100))
+```
+### only proximal 
+
+```{r day1_volcano_proximal}
+ggplot(filter(day1_test, proximity=="P"), aes(x=avg_log2FC, y=-log10(p_val), colour=sig_cond)) + geom_point(size=0.5) + 
+  geom_text_repel(data = filter(day1_test, proximity=="P" & sig == "sig") %>% slice_min(n=10, order_by = p_val), 
+                  aes(label=feature_name), show.legend = F) + 
+  scale_colour_manual(values=c(pal[4],"black",pal[2])) + guides(colour = guide_legend(override.aes = list(size = 2)))  +
+  ggtitle("day1") + coord_cartesian(x=c(-1,1))
+
+ggplot(filter(day1_test, proximity=="P"), aes(x=avg_log2FC, y=-log10(p_val), colour=sig_cond)) + geom_point(size=0.5) + 
+  geom_text_repel(data = filter(day1_test, proximity=="P" & sig == "sig") %>% slice_min(n=30, order_by = p_val), 
+                  aes(label=feature_name), show.legend = F) + 
+  scale_colour_manual(values=c(pal[4],"black",pal[2])) + guides(colour = guide_legend(override.aes = list(size = 2)))  +
+  ggtitle("day1") + coord_cartesian(x=c(-1,1))
+```
+
+```{r}
+filter(day1_test, sig_cond=="beige" & proximity=="P") %>% pull(best_gene_name) %>% length()
+```
+
+## Quick GO 
+
+
+```{r}
+molsig <- clusterProfiler::read.gmt("/projects/imb-pkbphil/sp/annotations/molsigdb/msigdb.v2024.1.Hs.symbols.gmt")
+head(molsig); nrow(molsig)
+
+prefixes = c("HALLMARK", "KEGG","REACTOME", "WP", "GOBP", "GOCC","GOMF")
+colnames(molsig) = c("term","gene")
+some.molsig = molsig[gsub("_.*","", molsig$term) %in% prefixes,]
+some.molsig$term = factor(some.molsig$term)
+table(gsub("_.*","", some.molsig$term))
+rm(molsig)
+```
+
+
+```{r}
+
+go_day1 = enricher(filter(day1_test, sig_cond=="beige") %>% pull(best_gene_name),
+               universe = all.genes$best_gene_name,
+            TERM2GENE = some.molsig)
+go_day1
+#dotplot(go_day1)
+```
+
+
+
+```{r}
+go_day3 = enricher(filter(day3_test, sig_cond=="beige") %>% pull(best_gene_name),
+               universe = all.genes$best_gene_name,
+            TERM2GENE = some.molsig)
+head(go_day3, n=10)[c(3:6,8:9)]
+dotplot(go_day3, showCategory=8) + theme_hp
+```
+
+
+
+## Save tables
+```{r}
+if (subset_data == F){
+  write.table(filter(day3_test, p_val_adj < 0.01), here(odir, "DE_day3_wvb.tsv"),
+              sep="\t",row.names = F, quote = F)
+  write.table(filter(day1_test, p_val_adj < 0.01), here(odir, "DE_day1_wvb.tsv"),
+              sep="\t",row.names = F, quote = F)
+}
+```
+

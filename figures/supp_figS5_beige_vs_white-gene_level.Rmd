@@ -1,0 +1,97 @@
+---
+title: "supp_figS5_beige_vs_white-gene_level"
+author: "Sarah Hazell Pickering"
+date: "2026-01-15"
+output: html_document
+---
+
+Beige vs White early adipogenesis analyed at the gene level
+
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(Seurat)
+library(clusterProfiler)
+library(dplyr)
+library(enrichplot)
+library(ggplot2)
+library(ggrepel)
+library(here)
+library(tidyr)
+```
+
+```{r params}
+module = "beige_vs_white"
+dataname = "downsample"
+load_data = T #loading data
+subset_data = F
+
+rmd_filename = "supp_figS5_beige_vs_white-gene_level"
+i_am(file.path("figures", paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486", "#E31A1C")
+clusters =   tvthemes::gravityFalls_pal()(13)
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+## Read data
+
+```{r}
+if (subset_data){
+  sbs = readRDS(here(odir, "10%_complete_analysis.rds"))
+} else {
+  sbs = readRDS(here(odir, "complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+Idents(sbs) = "seurat_clusters"
+sbs
+all.genes = row.names(sbs)
+table(Idents(sbs))
+```
+
+
+## A: Downsampling summary
+
+![Supp FigS5 A upper](analysis/beige_vs_white/figures/beige_vs_white_downsample/no_cells_presbs-1.png)
+![Supp FigS5 A lower](analysis/beige_vs_white/figures/beige_vs_white_downsample/no_cells_dwns-1.png)
+
+## B: UMAPs
+
+```{r B_umap}
+DimPlot(sbs, cols= clusters, shuffle=T, label=T)
+DimPlot(sbs, cols= clusters, shuffle=T, label=T)
+```
+## C: Full Cluster composition plot? 
+
+### Column version
+
+```{r wvb_proportion_test_columns}
+ggplot(to_plot, aes(x=cluster, fill=cond.time, y=prop))  +
+  geom_hline(yintercept = 0.5, linewidth=0.4, colour="grey55") + 
+  geom_bar(position="dodge", stat='identity') + 
+  geom_errorbar( aes(ymin=conf.int.1, ymax=conf.int.2), 
+                 position=position_dodge(0.9), width=0.4, linewidth=0.3) +
+  scale_fill_manual(values=pal[c(1,2,4,5)]) + facet_wrap(~time, scales="free_x")  +
+  scale_y_continuous(expand=c(0,0))
+```
+
+

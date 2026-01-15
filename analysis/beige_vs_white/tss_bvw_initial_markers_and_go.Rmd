@@ -1,0 +1,414 @@
+---
+title: "TSS analysis markers and GO"
+author: "Sarah Hazell Pickering"
+date: "2024-08-29"
+output: html_document
+---
+
+
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(ComplexHeatmap)
+library(Seurat)
+library(clusterProfiler)
+library(dplyr)
+library(enrichplot)
+library(ggplot2)
+library(ggsci)
+library(here)
+library(patchwork)
+library(viridis)
+```
+
+```{r params}
+module = "beige_vs_white"
+dataname = "tss_bvw_initial"
+load_data = T #loading data
+subset_data = F
+
+rmd_filename = "tss_bvw_initial_markers_and_go"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486","#E31A1C")
+clusters = #ggsci::pal_simpsons()(13)[c(1:7,9:13)]
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+
+```{r params}
+module="adipogenesis"
+dataname = "tss_bvw_initial"
+library(here); i_am(file.path("analysis", paste0(dataname,".Rmd")))
+
+odir = here("output", module, dataname) 
+
+load_data = T #loading data 
+subset_data = F
+```
+
+
+```{r libs, warning=F, message=F, echo=F}
+library(dplyr)
+library(ggplot2)
+library(ggsci)
+library(viridis)
+
+library(Seurat)
+library(BPCells)
+library(patchwork)
+
+library(clusterProfiler)
+library(enrichplot)
+```
+
+
+```{r themes}
+pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486","#E31A1C")
+clusters = #ggsci::pal_simpsons()(13)[c(1:7,9:13)]
+  tvthemes::gravityFalls_pal()(13)
+clpfx = "t"
+clevels = paste0(clpfx,c(9,11,6,2,3,10,7,0,4,8,1,5))
+names(clusters) = paste0(clpfx,0:length(clevels))
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
+#define new theme
+theme_hp = theme_classic(base_size=15) + 
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth=0.25),
+        strip.background = element_blank(), # remove boxes around facet labels
+        axis.text.y = element_text(size=10)
+        )
+#set for all ggplots
+theme_set(theme_hp)
+knitr::opts_chunk$set(dev=c("png","pdf"))
+```
+
+## Load seurat object
+```{r load_seurat, }
+if (subset_data){
+  sbs = readRDS(here(odir, "10%_subset_analysis.rds"))
+} else {
+  sbs = readRDS(here(odir,"complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+sbs
+#format clusters
+sbs$fclusters = factor(paste0(clpfx,sbs$seurat_clusters), levels=clevels)
+```
+
+
+## Marker genes 
+
+```{r}
+norm.markers = read.delim(here(odir,  "marker_genes.txt"))
+## Add time points to clusters 
+tcomp = read.delim(here(odir,"cluster_composition_condition_time.tsv"))
+head(tcomp)
+
+time_per_cluster = group_by(tcomp, seurat_clusters, time) %>% summarise(n_cells = sum(n_cells)) %>% 
+  slice_max(n=1, order_by = n_cells) %>% select(seurat_clusters, time)
+time_per_cluster
+
+norm.markers = merge(norm.markers, time_per_cluster, by.x="cluster",by.y="seurat_clusters")
+
+norm.markers$cluster = factor(paste0("t",norm.markers$cluster), levels = clevels)
+head(norm.markers)
+
+top.markers = as.data.frame(norm.markers %>%
+                              filter(!grepl("ADDG", gene))  %>%
+    group_by(cluster) %>%
+    slice_max(n = 2, order_by = avg_log2FC))
+top.markers
+
+
+```
+
+```{r top_markers, dev=c('png','pdf')}
+DotPlot(sbs, features=rev(unique(top.markers$simple_id)), group.by = "fclusters") & 
+  scale_colour_gradientn(colours = spectral) & coord_flip()
+
+top.markers$gene = factor(top.markers$gene, levels=rev(unique(top.markers$gene)))
+overlap.to.plot = filter(top.markers, gene %in% top.markers$gene)
+overlap.to.plot$gene = factor(overlap.to.plot$gene, levels=levels(top.markers$gene))
+
+ggplot(overlap.to.plot, aes(y=gene, size=abs(avg_log2FC), color=cluster,
+                    x=cluster)) + 
+  geom_point() + 
+  theme(axis.text.x=element_text(angle=30, hjust=1))  + 
+  scale_color_manual(values=clusters) + facet_grid(~time, scales="free_x", space="free_x")
+```
+
+```{r  top_markers_include_all}
+include_all_plot = filter(norm.markers, gene %in% overlap.to.plot$gene & p_val_adj< 0.01)
+include_all_plot$gene = factor(include_all_plot$gene, levels=levels(top.markers$gene))
+
+a = ggplot(include_all_plot, aes(x=cluster, y=gene, colour=cluster, size=avg_log2FC)) + 
+   geom_point(colour="black",aes(size = avg_log2FC +(avg_log2FC*0.25))) + geom_point() +
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +scale_color_manual(values=clusters) +
+  facet_grid(~time, scales="free_x", space="free_x")
+a
+
+```
+
+
+## Gene ontology
+
+```{r}
+clgo = read.delim(here(odir,"ORA_marker_genes.txt"))
+raw_go_terms = clgo %>% arrange(p.adjust) %>% filter(!grepl("^WP|MF",ID)) %>% group_by(cluster) %>% dplyr::slice(1:3) %>% as.data.frame() %>% pull(ID)
+#Getting Top time per cluster for sorting clusters
+tcomp = read.delim(here(odir,"cluster_composition_condition_time.tsv"))
+time_per_cluster = group_by(tcomp, seurat_clusters, time) %>% summarise(n_cells = sum(n_cells)) %>% 
+  slice_max(n=1, order_by = n_cells) %>% select(seurat_clusters, time)
+time_per_cluster
+
+clgo = merge(time_per_cluster, clgo,by.y="cluster", by.x="seurat_clusters")
+clgo$Cluster = factor(paste0(clpfx,clgo$Cluster), levels=clevels)
+head(clgo)
+```
+
+
+```{r go_replace}
+phrases= read.delim(here("data/gene_sets/abbreviations.txt"))
+recap= read.delim(here("data/gene_sets/capitalisations.txt"))
+```
+
+```{r abrev_go}
+drama_shorten = function(ont) {
+  for (x in 1:nrow(phrases)){
+    ont = gsub( phrases$phrase[x],phrases$abbreviation[x], ont, ignore.case = T)
+  }
+  a = abbreviate(gsub("_"," ", gsub("^[[:alpha:]]*_","",tolower(ont))),minlength=41, dot=T, named = F)
+  a = stringr::str_to_sentence(a)
+  for (i in 1:nrow(recap))
+    a = gsub(sprintf("\\b%s\\b", recap$lowercase[i]),recap$capital[i],a, ignore.case = T)
+  return(a)
+}
+```
+
+## coloured  GO plot
+
+```{r dev=c("png")}
+clgo$short_desc =drama_shorten(clgo$Description)
+go_to_plot = filter(clgo, p.adjust < 0.01) %>% group_by(Cluster) %>%
+              slice_min(n = 2, order_by = data.frame(p.adjust, pvalue))
+go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
+```
+
+
+```{r cluster_go, dev=c("png","pdf")}
+p = ggplot(go_to_plot, aes(x=Cluster, y=short_desc, colour=Cluster, size=Count)) + 
+  geom_point()+  scale_color_manual(values=clusters) + facet_grid(~time, scales="free_x", space = "free_x")  + 
+  theme(axis.text.x=element_text(angle=45, hjust=1), axis.title.y = element_blank())
+p
+
+ggplot(go_to_plot, aes(x=Cluster, y=short_desc, colour=time, size=Count)) + 
+  geom_point()+  scale_color_manual(values=pal[c(3,4,5)]) + facet_grid(~time, scales="free_x", space = "free_x") + 
+  theme(axis.text.x=element_text(angle=45, hjust=1), axis.title.y = element_blank())
+```
+
+```{r go_wo_wpmf}
+go_to_plot = filter(clgo, p.adjust < 0.01 & !grepl("^(WP|MF)", ID)) %>% group_by(Cluster) %>%
+              slice_min(n = 2, order_by = data.frame(p.adjust,pvalue))
+go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
+
+ggplot(go_to_plot, aes(x=Cluster, y=short_desc, colour=Cluster, size=Count)) + 
+  geom_point()+   
+  theme(axis.text.x=element_text(angle=45, hjust=1), axis.title.y = element_blank()) +
+  scale_color_manual(values=clusters) + facet_grid(~time, scales="free_x", space = "free_x") 
+
+```
+
+
+```{r cluster_go_overlapping, dev=c("png","pdf")}
+include_all_plot = filter(clgo, Description %in% go_to_plot$Description & p.adjust < 0.01)
+include_all_plot$short_desc = factor(include_all_plot$short_desc, levels=levels(go_to_plot$short_desc))
+ggplot(include_all_plot, aes(x=Cluster, y=short_desc, colour=Cluster, size=Count)) + 
+  geom_point()+ 
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +scale_color_manual(values=clusters) + 
+  facet_grid(~time, scales="free_x", space = "free_x") 
+
+ggplot(include_all_plot,  aes(x=Cluster, y=short_desc, colour=time, size=Count)) + 
+  geom_point()+  scale_color_manual(values=pal[c(3,4,5)]) +
+    theme(axis.text.x=element_text(angle=45, hjust=1), axis.title.y = element_blank()) + 
+  facet_grid(~time, scales="free_x", space = "free_x") 
+```
+
+## TSS Heatmap
+
+
+```{r load_go, }
+molsig <- clusterProfiler::read.gmt("/projects/imb-pkbphil/sp/annotations/molsigdb/msigdb.v2024.1.Hs.symbols.gmt")
+head(molsig); nrow(molsig)
+##Pick gene sets to look in bcos all is a lot
+prefixes = c("HALLMARK", "KEGG","REACTOME", "WP", "GOBP", "GOCC","GOMF")
+colnames(molsig) = c("term","gene")
+some.molsig = molsig[gsub("_.*","", molsig$term) %in% prefixes,]
+some.molsig$term = factor(some.molsig$term)
+table(gsub("_.*","", some.molsig$term))
+```
+
+```{r, }
+top2_terms = go_to_plot[["ID"]]
+top2_genelist = list()
+for (n in unique(top2_terms)){
+  top2_genelist[[n]] = some.molsig$gene[some.molsig$term == n]
+}
+str(top2_genelist)
+```
+
+```{r}
+length(unique(unlist(top2_genelist)))
+```
+
+
+```{r}
+format_tss_ids = function(tss_id){
+  df = data.frame(tss_id=tss_id)
+  df =  mutate(df, 
+         simple_id = gsub("r[0-9]*@ADDG[0-9M]*\\.[A-Z],","",
+                        gsub(",r[0-9]*@ADDG[0-9M]*\\.[A-Z]$","",tss_id)),
+         feature_name = gsub("^[PD]:","",#remove P/D info
+                             if_else(grepl("@MT-.*,r[0-9]*@MT-",tss_id), 
+                             gsub(",r1@MT-",",", simple_id),#compress MT loci
+                              gsub("@ADDG.{8}","@..", simple_id))),
+         #for GO analysis need gene name; pick first, unless it has an obvious no symbol
+         best_gene_name = gsub(",.*","",gsub("r[0-9]*@((MIR|AL|LINC|FP)[0-9\\.-]*,r[0-9]*@)?","", feature_name)),
+         best_feature_name = gsub(",.*","",gsub("r1@((MIR|AL|LINC|FP)[0-9\\.-]*,r[0-9]*@)?","", feature_name)),
+         gene_names = gsub("([DP]:)?r[0-9]*@", "", simple_id),
+         proximity = gsub(":r[0-9]*@.*", "", simple_id)
+         )
+  return (df)
+}
+all.genes = format_tss_ids(row.names(sbs)) 
+```
+
+
+
+
+```{r}
+#Turning GO gene names into feature names
+top2_features= top2_genelist
+for (term in names(top2_genelist)){
+  genes = top2_genelist[[term]]
+  top2_features[[term]] = c() #clean the slate
+  for (gene in genes){
+    features = all.genes$tss_id[all.genes$best_gene_name == gene]
+    top2_features[[term]] = c(top2_features[[term]],unique(features))
+  }
+}
+str(top2_features)
+```
+
+
+
+```{r }
+summary(duplicated(rownames(sbs)))
+to_keep = all.genes$tss_id[!grepl("^\\.+[0-9]+", all.genes$best_gene_name)]
+so_to_plot = subset(sbs, features = to_keep)
+so_to_plot[["RNA"]][[]] = NULL
+so_to_plot[["RNA"]][[]] = format_tss_ids(row.names(so_to_plot))
+so_to_plot
+summary(duplicated(rownames(so_to_plot)))
+```
+
+### Dot plot
+```{r}
+so_to_plot = AddModuleScore(so_to_plot, features = top2_features, name="top2GO")
+colnames(so_to_plot@meta.data)[grep("top2GO",colnames(so_to_plot@meta.data))] = names(top2_features)
+DotPlot(so_to_plot, features=names(top2_features)) + coord_flip() + 
+  scale_colour_gradientn(colours=spectral) + 
+  scale_x_discrete(labels=drama_shorten(names(top2_genelist)))
+```
+
+```{r}
+library(ComplexHeatmap)
+head(so_to_plot@meta.data)
+filt = subset(so_to_plot, downsample=100)
+go_matrix= filt@meta.data[names(top2_genelist)]
+cell_ids = filt@meta.data[c("time","fclusters")]
+go_matrix = t(scale(data.matrix(go_matrix)))
+go_matrix[1:3,1:3]
+```
+
+## Heatmap 
+
+
+```{r go_heatmap, }
+rownames(go_matrix) = drama_shorten(rownames(go_matrix))
+time_pal = pal[c(3,2,1)]
+names(time_pal) = c("day0","day1","day3")
+ha = HeatmapAnnotation( cluster = cell_ids$fclusters,
+                        col = list(cluster=clusters), 
+                        show_legend = F, annotation_name_side = "left")
+
+ba = HeatmapAnnotation( time = cell_ids$time, 
+                        col = list(time=time_pal), 
+                        show_legend = F, annotation_name_side = "left")
+h =Heatmap(go_matrix, show_column_names = F, column_split = cell_ids$fclusters, 
+        cluster_columns = F, show_heatmap_legend = F, top_annotation = ha, bottom_annotation = ba, 
+        row_names_max_width = unit(9,"cm"), 
+        column_title_gp = gpar(fontsize=11), 
+        row_names_gp = gpar(fontsize=11),
+        row_title_gp = gpar(fontsize=11))
+h
+
+```
+## Featuring PPARG
+
+```{r}
+pparg = FetchData(sbs, c("P:r1@PPARG","P:r2@PPARG"), layer = "data")
+colnames(pparg) = c("pparg1","pparg2")
+pparg$ratio = (pparg$pparg2+0.5)/(pparg$pparg1+0.5)
+summary(pparg$ratio)
+summary(log2(pparg$ratio))
+sbs$pparg_logratio = log2(pparg$ratio)
+sbs$pparg_ratio = pparg$ratio
+FeaturePlot(sbs,c("P:r1@PPARG","P:r2@PPARG", "pparg_logratio", "pparg_ratio"), order = T) & scale_colour_gradientn(colours=spectral)
+RidgePlot(sbs,c("P:r1@PPARG", "P:r2@PPARG"), stack=T, group.by = "condition")
+RidgePlot(sbs,c("P:r1@PPARG", "P:r2@PPARG"), stack=T, fill.by="ident", cols = clusters)
+```
+
+```{r pparg_isoforms}
+FeaturePlot(sbs,c("P:r1@PPARG")) & scale_colour_gradientn(colours=spectral) & theme_hp
+FeaturePlot(sbs,c("P:r2@PPARG")) & scale_colour_gradientn(colours=spectral)& theme_hp
+```
+
+
+```{r pparg_ratio}
+FeaturePlot(sbs, "pparg_logratio", alpha=0.2, pt.size=0.5)  & scale_color_distiller(palette = "PiYG", limits = c(-2,2))& theme_hp
+FeaturePlot(sbs, "pparg_logratio", order=T, alpha=0.2, pt.size=0.5) & scale_color_distiller(palette = "PiYG", limits = c(-2,2))& theme_hp
+```
+
+```{r}
+RidgePlot(sbs,c("P:r1@PEMT", "P:r2@PEMT"), stack=T, fill.by="ident", cols = clusters)
+```
+
+```{r}
+VlnPlot(sbs,grep("MZF1|HIC1|E2F6|KLF2|RELB", row.names(sbs), value=T), stack=T, fill.by="ident", cols = clusters, flip=T)
+
+VlnPlot(sbs,grep("PRDM4|TFAP2", row.names(sbs), value=T), stack=T, fill.by="ident", cols = clusters, flip=T)
+```
+
+
+

@@ -1,0 +1,180 @@
+---
+title: "Figure 5: Beige_vs_white"
+author: "Sarah Hazell Pickering"
+date: "2026-01-14"
+output: html_document
+---
+
+# Figure 5
+## Beige vs white
+
+## Setup
+
+
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(Seurat)
+library(clusterProfiler)
+library(dplyr)
+library(enrichplot)
+library(ggplot2)
+library(ggrepel)
+library(here)
+library(tidyr)
+```
+
+```{r global_params}
+module = "beige_vs_white"
+
+load_data = T #loading data
+subset_data = F
+
+rmd_filename = "figure5_beige_vs_white"
+i_am(file.path("figures", paste0(rmd_filename,".Rmd")))
+```
+
+```{r setup}
+set.seed(8)
+fig_dir = here("figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486", "#E31A1C")
+clusters =   tvthemes::gravityFalls_pal()(13)
+paired_clusters = c(rbind(colorspace::darken(clusters, amount=0.3),
+                    colorspace::lighten(clusters, amount=0.3)))
+#scales::show_col(paired_clusters)
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+## Gene-level 
+### panels B & C
+
+```{r gene_params}
+dataname = "downsample"
+odir = here("output", module, dataname)
+cluster_levels = c("b9","b6","b0","b7","b10","b5","b1","b2","b4")
+```
+
+### Read tables
+```{r}
+tcomp =  read.delim(here(odir,"cluster_composition_condition_time.tsv"))
+head(tcomp)
+cluster_test_gene = read.delim(here(odir,"cluster_composition_test.tsv"))
+cluster_test_gene$cluster = factor(cluster_test_gene$cluster, levels=cluster_levels)
+head(cluster_test_gene)
+```
+
+
+```{r}
+bvw_deg = read.delim(here(odir, "DE_per_cluster_white_vs_beige.tsv"))
+bvw_deg$cluster = factor(bvw_deg$cluster, levels=paste0("b",0:max(as.integer(gsub("b","", deg$cluster)))))
+head(bvw_deg)
+```
+
+## B: Cluster comparison (column plots)
+
+```{r}
+to_plot = dplyr::rename(cluster_test_gene, prop_beige=prop, conf.int.1_beige=conf.int.1, conf.int.2_beige=conf.int.2)
+to_plot$prop_white = 1-to_plot$prop_beige
+to_plot$conf.int.1_white = to_plot$conf.int.1_beige + (to_plot$prop_white - to_plot$prop_beige)
+to_plot$conf.int.2_white = to_plot$conf.int.2_beige + (to_plot$prop_white - to_plot$prop_beige)
+to_plot = pivot_longer(to_plot, matches("white|beige"), 
+                       names_to = c(".value","condition"),
+                       names_pattern = "(.*)_(.*)",
+                     )
+
+to_plot$cond.time = paste(to_plot$condition, sep=".", to_plot$time)
+to_plot$cond.time = factor(to_plot$cond.time, levels=c("white.day1","white.day3","beige.day1","beige.day3"))
+to_plot$clu.cond.time = paste(to_plot$cluster, sep=".", to_plot$cond.time)
+to_plot 
+```
+
+### Modern version
+
+Stars on b5 and b2
+```{r B_wvb_proportion_test}
+ggplot(to_plot, aes(x=condition, fill=clu.cond.time, y=prop, colour=p.adjust < 0.05))  +
+  geom_hline(yintercept = 0.5, linewidth=0.4, colour="grey55") + 
+  geom_bar(position="dodge", stat='identity', show.legend = F) + 
+  geom_errorbar( aes(ymin=conf.int.1, ymax=conf.int.2), 
+                 position=position_dodge(0.9), width=0.4, linewidth=0.3, colour="black") +
+  facet_wrap(time~cluster,nrow=2, scales = "free_x")  +
+  scale_y_continuous(expand=c(0,0)) + scale_fill_manual(values=paired_clusters) +
+    labs(x=NULL, y="Proportion of cells") +
+    scale_colour_manual(values = c("transparent", "black"))
+```
+
+
+## C: Gene expression
+
+
+```{r}
+nonmt = filter(bvw_deg, !grepl("MT-", gene_name))
+top_nonmt = group_by(nonmt, cluster) %>% arrange(avg_log2FC) 
+beige = filter(top_nonmt, avg_log2FC > 0) %>% slice_max(n=3, order_by = avg_log2FC)
+white = filter(top_nonmt, avg_log2FC < 0) %>% slice_min( n=3, order_by = avg_log2FC)
+top_total = union(beige, white) # removes duplicates
+head(top_total)
+```
+
+```{r}
+#needed to sort gene names by cluster
+top_total = arrange(top_total, time, cluster, avg_log2FC)
+top_total$gene_name = factor(top_total$gene_name, levels=unique(top_total$gene_name))
+```
+
+
+```{r C_nomt_de_per_cluster}
+ggplot(top_total, aes(y=gene_name, colour=avg_log2FC, 
+                    x=cluster)) + 
+  geom_point(size=5) + 
+  scale_colour_gradient2(low="#1F78B4",mid="beige",high="#FF7F00") +
+    facet_wrap(~time, scales="free")
+```
+
+
+
+
+## TSS-level
+### panels D-H
+
+```{r tss_params}
+dataname = "tss_bvw_initial"
+odir = here("output", module, dataname)
+```
+
+### Read data
+
+```{r}
+if (subset_data){
+  sbs = readRDS(here(odir, "10%_complete_analysis.rds"))
+} else {
+  sbs = readRDS(here(odir, "complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+Idents(sbs) = "seurat_clusters"
+sbs
+all.genes = row.names(sbs)
+table(Idents(sbs))
+```
+
+## D: UMAPs
+
+```{r umap}
+DimPlot(sbs, group.by="time.condition", cols= pal, shuffle=T, label=F)
+DimPlot(sbs, cols= clusters, shuffle=T, label=F)
+```
+
+## E: Cluster comparison (column plots)
+
+
