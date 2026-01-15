@@ -116,6 +116,8 @@ def detect_module(rmd_path, categories):
             return cat
         elif "white_only" in base:
             return "adipogenesis"
+        elif "tss" in base:
+            return "beige_vs_white"
     return "uncategorized"
 
 # -------------------------------
@@ -352,21 +354,11 @@ def migrate_file(src_rmd, dest_root, tpls, categories, default_seed=1234, dry_ru
     #new_body = remove_duplicate_chunks(body)
     
     ## Find and replace edits
-    search_strs = {"file.path(odir":"here(odir",
-                      "here(odir,dataname":"here(odir",
-                     "here(odir, dataname":"here(odir",
-                     "figdir":"fig_dir"
-        
-    }#to do: from template 
     search_strs = tpls["strings_to_replace"]
     for s in search_strs.keys():
         if s in new_body:
             new_body = new_body.replace(s, search_strs[s])
             print("Replacing \"{}\" {} times".format(s,new_body.count(s)))
-    #new_body = new_body.replace("file.path(odir","here(odir")
-    #new_body = new_body.replace("here(odir,dataname","here(odir") \
-     #                  .replace("here(odir, dataname","here(odir")
-    
             
     ##Build Rmd  
     joined_blocks = "\n\n".join([libs_block, meta_block, setup_block, themes_block])

@@ -226,6 +226,12 @@ rule figure3:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
         "{params.cmd}"  
+
+#rule supp_progenitors:
+    #unintergrated progenitor markers
+    #integration trial + scvi
+    #clustree/cluster stability
+    #cell cycle
         
          
 
@@ -290,7 +296,211 @@ rule white_only_downsample:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
         "{params.cmd}"          
-#already migrated: clustree           
+#already migrated: clustree
+
+##cluster stability check & decide number of clusters
                 
-                
-                
+rule figure4:
+    '''Status TBA
+    '''
+    input:
+        rdata = ODIR + "/complete_analysis.rds",
+        marker_genes = ODIR + "/marker_genes.txt",
+        GO_table =  ODIR +"/ORA_marker_genes.txt",
+        cluster_info = ODIR + "/cluster_composition.txt",
+        rmd = ADIR + "/figure4_adipogenesis.Rmd"
+    output:
+        report = ADIR + "/white_only_downsample.html",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"  
+        
+        
+##-------------------------------------------------##
+##       Beige vs white (in early adipogenesis)    ##
+##-------------------------------------------------##
+
+
+ADIR = "analysis/beige_vs_white"
+ODIR = "output/beige_vs_white/downsample"
+
+rule beige_vs_white_downsample:
+    '''Status: Knitted'''
+    input:
+        rdata = INDIR + "/complete_analysis.rds",
+        rmd = ADIR + "/beige_vs_white_downsample.Rmd"
+    output:
+        report = ADIR + "/beige_vs_white_downsample.html",
+        rdata = ODIR + "/complete_analysis.rds",
+        subset_rdata = ODIR + "/10%_complete_analysis.rds",
+        marker_genes = ODIR + "/marker_genes.txt",
+        GO_table =  ODIR +"/ORA_marker_genes.txt",
+        cluster_info = ODIR + "/cluster_composition.txt",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"  
+
+#rule bvw_markers_and_go:
+# '''Status: Migrated'''
+
+#rule bvw_DE_per_time:
+# '''Status: Migrated'''
+#   output:
+#       de = expand("{dir}/DE_{time}_wvb.tsv",dir=ODIR,time=["day1","day3"])
+
+rule bvw_cluster_tests:
+    '''Status: Migrated '''
+    input:
+        rdata = ODIR + "/complete_analysis.rds",
+        cluster_info = ODIR + "/cluster_composition.txt",
+        rmd = ADIR + "/beige_vs_white_downsample_cluster_tests.Rmd"
+    output:
+        report = ADIR + "/beige_vs_white_downsample_cluster_tests.html",
+        result = ODIR + "/cluster_composition_test.tsv",
+        cluster_info = ODIR + "/cluster_composition_condition_time.tsv"
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"  
+
+rule bvw_DE_per_cluster:
+    '''Status: Migrated '''
+    input:
+        rdata = ODIR + "/complete_analysis.rds",
+        cluster_info = ODIR + "/cluster_composition_condition_time.tsv",
+        rmd = ADIR + "/beige_vs_white_downsample_DE_per_cluster.Rmd"
+    output:
+        report = ADIR + "/beige_vs_white_downsample_DE_per_cluster.html",
+        deg = ODIR + "/DE_per_cluster_white_vs_beige.tsv",
+        go = ODIR + "/DE_per_cluster_white_vs_beige_GO_terms.tsv"
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}" 
+        
+##-------------------------------------------------##
+##                  TSS-level analysis             ##
+##              of beige vs white data             ##
+##-------------------------------------------------##
+
+INDIR = "data/scafe/count/day0_to_day3_rep1"
+TSS_DIR = "output/beige_vs_white/tss_bvw_initial"
+
+rule tss_bvw_initial:
+    '''Status: Migrated'''
+    input:
+        raw_counts = expand("{dir}/{sample}/matrix/{files}",
+                        dir = INDIR,
+                        sample = ["white_day3","white_day1",
+                                    "asc_day0",
+                                    "beige_day1","beige_day3"],
+                        files = ["barcodes.tsv","genes.tsv","matrix.mtx"]),
+        rmd = ADIR + "/tss_bvw_initial.Rmd"
+    output:
+        #raw_rdata = TSS_DIR + "/unfiltered_object.rds", #if first time running only
+        report = ADIR + "/tss_bvw_initial.html",
+        rdata = TSS_DIR + "/complete_analysis.rds",
+        subset_rdata = TSS_DIR + "/10%_complete_analysis.rds",
+        marker_genes = TSS_DIR + "/marker_genes.txt",
+        GO_table =  TSS_DIR +"/ORA_marker_genes.txt",
+        cluster_info = TSS_DIR + "/cluster_composition.tsv",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"  
+        
+# rule tss_markers_and_go:
+#     '''Status: Migrated'''
+#  
+# rule tss_DE_per_time:
+#     '''Status: Migrated'''
+        
+rule tss_cluster_tests:
+    '''Status: Migrated'''
+    input:
+        rdata = TSS_DIR + "/complete_analysis.rds",
+        cluster_info = TSS_DIR + "/cluster_composition.tsv",
+        rmd = ADIR + "/tss_bvw_initial_cluster_tests.Rmd",
+    output:
+        report = ADIR + "/tss_bvw_initial_cluster_tests.html",
+        cluster_info = TSS_DIR + "/cluster_composition_condition_time.tsv",
+        result = TSS_DIR + "/cluster_composition_test.tsv",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}" 
+
+rule tss_DE_per_cluster:
+    '''Status: Migrated '''
+    input:
+        rdata = TSS_DIR + "/complete_analysis.rds",
+        cluster_info = TSS_DIR + "/cluster_composition_condition_time.tsv",
+        rmd = ADIR + "/tss_bvw_initial_DE_per_cluster.Rmd"
+    output:
+        report = ADIR + "/tss_bvw_initial_DE_per_cluster.html",
+        deg = TSS_DIR + "/DE_per_cluster_wvb.tsv",
+        go = TSS_DIR + "/DE_per_cluster_wvb_GO_terms.tsv"
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}" 
+
+rule figure5:
+    input:
+        #Beige vs white (gene level)
+        bvw_result = ODIR + "/cluster_composition_test.tsv",#B cluster comp bvw
+        bvw_deg = ODIR + "/DE_per_cluster_white_vs_beige.tsv",#C wvb genes per cluster
+        #Tss level (beige vs white)
+        rdata = TSS_DIR + "/complete_analysis.rds",#D
+        result = TSS_DIR + "/cluster_composition_test.tsv",#E
+        marker_genes = TSS_DIR + "/marker_genes.txt",#F #remove day0
+        GO_table =  TSS_DIR +"/ORA_marker_genes.txt",#G #remove day0
+        tdeg = TSS_DIR + "/DE_per_cluster_wvb.tsv",#H
+        go = TSS_DIR + "/DE_per_cluster_wvb_GO_terms.tsv",#I
+        rmd = "figures/figure5_beige_vs_white.Rmd"
+    output:
+        report = "figures/figure5_beige_vs_white_adipogenesis.html"
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}" 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -5,8 +5,9 @@ library(reticulate)
 library(here); i_am("code/rscript_sceasy.R")
 use_condaenv('sceasy')
 
-input_file = snakemake@input[[1]]
-output_file = snakemake@output[[1]]
+args = commandArgs(TRUE)
+input_file = args[1]#snakemake@input[[1]]
+output_file = args[2]#snakemake@output[[1]]
 
 print("Loading seurat object")
 seurat_object = readRDS(here(input_file))

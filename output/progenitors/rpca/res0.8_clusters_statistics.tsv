@@ -1,0 +1,24 @@
+tree_order tree cluster_match pval type shc_label
+1 Node 0: 0                          NA 0 node Node0
+2  ¦--Node 1: 0                      NA 0 node Node1
+3  ¦   ¦--Cluster 1                  new_p4 NA cluster Cluster1
+4  ¦   °--Node 3: 0.02               NA 0.02 node Node3
+5  ¦       ¦--Cluster 2              new_p4 NA cluster Cluster2
+6  ¦       °--Cluster 3              new_p5 NA cluster Cluster3
+7  °--Node 2: 0                      NA 0 node Node2
+8      ¦--Cluster 4: 0.16            new_p1//p2 0.16 cluster Cluster4
+9      °--Node 4: 0                  NA 0 node Node4
+10          ¦--Node 5: 0              NA 0 node Node5
+11          ¦   ¦--Node 7: 0          NA 0 node Node7
+12          ¦   ¦   ¦--Cluster 6      new_p1 NA cluster Cluster6
+13          ¦   ¦   °--Cluster 7      new_p2 NA cluster Cluster7
+14          ¦   °--Node 8: 0          NA 0 node Node8
+15          ¦       ¦--Cluster 8      new_p0 NA cluster Cluster8
+16          ¦       °--Cluster 9      new_p0 NA cluster Cluster9
+17          °--Node 6: 0              NA 0 node Node6
+18              ¦--Cluster 5          new_p6 NA cluster Cluster5
+19              °--Node 9: 0          NA 0 node Node9
+20                  ¦--Cluster 10     new_p3 NA cluster Cluster10
+21                  °--Node 10: 0     NA 0 node Node10
+22                      ¦--Cluster 11 new_p0 NA cluster Cluster11
+23                      °--Cluster 12 new_p0//p1 NA cluster Cluster12

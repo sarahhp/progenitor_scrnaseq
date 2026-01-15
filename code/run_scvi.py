@@ -15,21 +15,33 @@ rule all:
                 file = "10%_10%_complete_analysis.scviintegrated")
 
 rule seurat_to_anndata:
+    ''' Version 2 loads the RStudio module and checks if it needs
+    to create the reticulate conda env sceasy.
+    '''
     input:
-        expand("{dir}/{indata}/{{file}}.rds",
+        rdata = expand("{dir}/{indata}/{{file}}.rds",
                 dir = OUT,
-                indata = INDATA)
-
-    conda: "../envs/sceasy.yml"
+                indata = INDATA),
+        rscript = "code/convert_seurat_to_anndata.R"
+    params:
+        condaenv = "sceasy",
+        MODULE = "RStudio/2023.12.1+402-1-R-4.2.1"
     output:
-        expand("{dir}/{dataname}/{{file}}.h5ad",
+        anndata = expand("{dir}/{dataname}/{{file}}.h5ad",
                 dir = OUT,
                 dataname=DATANAME),
-        expand("{dir}/{dataname}/10%_{{file}}.h5ad",
+        subset = expand("{dir}/{dataname}/10%_{{file}}.h5ad",
                 dir = OUT,
                 dataname=DATANAME)
-    script:
-        "convert_seurat_to_anndata.R"
+    shell:
+        "if ! conda env list | grep -q \"^{params.condaenv}\"; then "
+            "echo 'Creating conda env: sceasy' ; "
+            "mamba env create --file envs/sceasy.yml -y; fi ; "
+        "if ! module -t list 2>&1 | grep -q '^${params.MODULE}$'; then "
+            "echo 'Loading module: {params.MODULE}' ; "
+            "module load {params.MODULE}; fi ; "
+        "Rscript  {input.rscript} {input.rdata} {output.anndata}"  
+        
 
 rule scvi:
     input:
