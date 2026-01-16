@@ -117,7 +117,8 @@ write.table(tcomp, here(odir, "cluster_composition_condition_time.tsv"),
 For plotting and testing we want to focus of the main timepoint for each cluster; this selects the majority timepoint per cluster and then subsets our frequency table.  
 ```{r}
 time_per_cluster = group_by(tcomp, seurat_clusters, time) %>% summarise(n_cells = sum(n_cells)) %>% 
-  slice_max(n=1, order_by = n_cells) %>% select(seurat_clusters, time)
+  slice_max(n=1, order_by = n_cells) %>% mutate(cluster=paste0("t",seurat_clusters)) %>%
+    select(seurat_clusters, cluster, time) 
 time_per_cluster
 
 bestmatches = merge(tcomp, time_per_cluster, by=c("seurat_clusters","time"), all=F)
@@ -144,13 +145,13 @@ ggplot(bestmatches, aes(x=seurat_clusters, fill=cond.time, y=n_cells)) +
 Test if the proportion of white and beige cells in each cluster is different; aka is it different from a 0.5 white/beige proportion.  To simplify this I'm only going to check cells from the majority time point for each cluster.
 
 ```{r}
-clusters_to_test = filter(bestmatches, condition == "beige") %>% pull(seurat_clusters) %>% unique()
+clusters_to_test = filter(bestmatches, condition == "beige") %>% pull(cluster) %>% unique()
 clusters_to_test
 
-wvb_df = filter(bestmatches, seurat_clusters %in% clusters_to_test) %>% 
-  pivot_wider(names_from=condition, values_from = n_cells, id_cols = seurat_clusters) %>% 
+wvb_df = filter(bestmatches, cluster %in% clusters_to_test) %>% 
+  pivot_wider(names_from=condition, values_from = n_cells, id_cols = cluster) %>% 
   as.data.frame()
-rownames(wvb_df) = paste0("c",wvb_df$seurat_clusters)
+rownames(wvb_df) = wvb_df$cluster
 wvb = data.matrix(wvb_df)
 wvb = wvb[,2:3]
 wvb
@@ -164,7 +165,7 @@ prop.test(wvb) #Yes some are different
 
 ```{r}
 clu_tests  = list()
-tests = data.frame(cluster = paste0("c",clusters_to_test), prop = wvb[,"beige"]/(wvb[,"white"]+wvb[,"beige"]),p.value=NA, conf.int.1=NA, conf.int.2=NA)
+tests = data.frame(cluster = clusters_to_test, prop = wvb[,"beige"]/(wvb[,"white"]+wvb[,"beige"]),p.value=NA, conf.int.1=NA, conf.int.2=NA)
 
 for (clu in tests$cluster){
   res = prop.test(matrix(wvb[clu,], ncol = 2), conf.level=0.99)
@@ -176,6 +177,7 @@ for (clu in tests$cluster){
 clu_tests[[1]]$p.value
 clu_tests[[1]]
 tests$p.adjust = round(p.adjust(tests$p.value, method="fdr"), 6)
+tests = merge(tests, time_per_cluster, by=c("cluster"))
 tests
 ```
 c7 and c8 have significantly different proportions ** ****
@@ -191,8 +193,8 @@ to_plot = pivot_longer(to_plot, matches("white|beige"),
                        names_to = c(".value","condition"),
                        names_pattern = "(.*)_(.*)",
                      )
-bestmatches$cluster = paste0("c",bestmatches$seurat_clusters)
-to_plot = merge(to_plot, bestmatches, by=c("cluster","condition"))
+to_plot$cond.time = paste(to_plot$condition, sep=".", to_plot$time)
+head(to_plot)
 ```
 
 

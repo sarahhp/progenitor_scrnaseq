@@ -27,3 +27,4 @@ tnfa	TFNa
 upr	UPR
 uv	UV
 vegfavegfr2	UVEGFA-VEGFR2
+nrf2	NRF2

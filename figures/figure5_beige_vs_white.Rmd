@@ -46,13 +46,15 @@ knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
 theme_hp = theme_classic(base_size = 15) +
   theme(axis.line = element_line(linewidth = 0.25),
         axis.ticks = element_line(linewidth = 0.25),
-        strip.background = element_blank())
+        strip.background = element_blank(),
+        #Add facet boxes
+        panel.border=element_rect(colour="lightgrey", fill=NA),
+        #Add black border to colourbar legends
+        legend.ticks = element_line(colour="black", linewidth=0.25),
+        legend.frame = element_rect(colour="black", linewidth = 0.25),
+        legend.title = element_text(size=13,hjust=0.5))
 theme_set(theme_hp)
 pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486", "#E31A1C")
-clusters =   tvthemes::gravityFalls_pal()(13)
-paired_clusters = c(rbind(colorspace::darken(clusters, amount=0.3),
-                    colorspace::lighten(clusters, amount=0.3)))
-#scales::show_col(paired_clusters)
 spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
 ```
 
@@ -62,13 +64,14 @@ spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
 ```{r gene_params}
 dataname = "downsample"
 odir = here("output", module, dataname)
+clusters =   MetBrewer::met.brewer("Redon", 12)
+paired_clusters = c(rbind(colorspace::darken(clusters, amount=0.3),
+                    colorspace::lighten(clusters, amount=0.3)))
 cluster_levels = c("b9","b6","b0","b7","b10","b5","b1","b2","b4")
 ```
 
 ### Read tables
 ```{r}
-tcomp =  read.delim(here(odir,"cluster_composition_condition_time.tsv"))
-head(tcomp)
 cluster_test_gene = read.delim(here(odir,"cluster_composition_test.tsv"))
 cluster_test_gene$cluster = factor(cluster_test_gene$cluster, levels=cluster_levels)
 head(cluster_test_gene)
@@ -77,7 +80,7 @@ head(cluster_test_gene)
 
 ```{r}
 bvw_deg = read.delim(here(odir, "DE_per_cluster_white_vs_beige.tsv"))
-bvw_deg$cluster = factor(bvw_deg$cluster, levels=paste0("b",0:max(as.integer(gsub("b","", deg$cluster)))))
+bvw_deg$cluster = factor(bvw_deg$cluster, levels=paste0("b",0:max(as.integer(gsub("b","", bvw_deg$cluster)))))
 head(bvw_deg)
 ```
 
@@ -92,31 +95,34 @@ to_plot = pivot_longer(to_plot, matches("white|beige"),
                        names_to = c(".value","condition"),
                        names_pattern = "(.*)_(.*)",
                      )
-
+to_plot = mutate(to_plot, 
+                 condition = factor(condition, levels=c("white","beige")),
+                 clu_pval_star = if_else(p.adjust < 0.01, paste(cluster, "**"),
+                                 if_else(p.adjust < 0.05, paste(cluster, "*"),
+                                         cluster)))
 to_plot$cond.time = paste(to_plot$condition, sep=".", to_plot$time)
 to_plot$cond.time = factor(to_plot$cond.time, levels=c("white.day1","white.day3","beige.day1","beige.day3"))
 to_plot$clu.cond.time = paste(to_plot$cluster, sep=".", to_plot$cond.time)
 to_plot 
 ```
 
-### Modern version
 
-Stars on b5 and b2
+
+To do: Stars on b5 and b2
 ```{r B_wvb_proportion_test}
-ggplot(to_plot, aes(x=condition, fill=clu.cond.time, y=prop, colour=p.adjust < 0.05))  +
+ggplot(to_plot, aes(x=condition, fill=clu.cond.time, y=prop))  +
   geom_hline(yintercept = 0.5, linewidth=0.4, colour="grey55") + 
   geom_bar(position="dodge", stat='identity', show.legend = F) + 
   geom_errorbar( aes(ymin=conf.int.1, ymax=conf.int.2), 
-                 position=position_dodge(0.9), width=0.4, linewidth=0.3, colour="black") +
-  facet_wrap(time~cluster,nrow=2, scales = "free_x")  +
+                 position=position_dodge(0.9), 
+                 width=0.4, linewidth=0.3, colour="black") +
+  facet_wrap(time~clu_pval_star,nrow=2, scales = "free_x")  +
   scale_y_continuous(expand=c(0,0)) + scale_fill_manual(values=paired_clusters) +
-    labs(x=NULL, y="Proportion of cells") +
-    scale_colour_manual(values = c("transparent", "black"))
+    labs(x=NULL, y="Proportion of cells") 
 ```
 
 
-## C: Gene expression
-
+## C: DEG per cluster
 
 ```{r}
 nonmt = filter(bvw_deg, !grepl("MT-", gene_name))
@@ -133,16 +139,16 @@ top_total = arrange(top_total, time, cluster, avg_log2FC)
 top_total$gene_name = factor(top_total$gene_name, levels=unique(top_total$gene_name))
 ```
 
-
+FYI cluster b10 had no significant genes after multiple testing adjustment (1 before)
 ```{r C_nomt_de_per_cluster}
 ggplot(top_total, aes(y=gene_name, colour=avg_log2FC, 
                     x=cluster)) + 
   geom_point(size=5) + 
   scale_colour_gradient2(low="#1F78B4",mid="beige",high="#FF7F00") +
-    facet_wrap(~time, scales="free")
+    facet_wrap(~time, scales="free") +
+    labs(y="Gene",x="Beige vs white cluster", colour="Mean\nlog_2FC") +
+    theme(legend.title = element_text(size=13,hjust=0.5, vjust=4))
 ```
-
-
 
 
 ## TSS-level
@@ -151,6 +157,15 @@ ggplot(top_total, aes(y=gene_name, colour=avg_log2FC,
 ```{r tss_params}
 dataname = "tss_bvw_initial"
 odir = here("output", module, dataname)
+clusters =  tvthemes::gravityFalls_pal()(12)
+cluster_levels = c("t7","t10","t1","t11","t3","t8","t9","t5","t0","t2","t4","t6")
+names(clusters) = paste0("t", 0:(length(cluster_levels)-1))
+clusters
+paired_clusters = c(rbind(colorspace::lighten(clusters, amount=0.3),
+                    colorspace::darken(clusters, amount=0.3)))
+clu.cond_levels = paste(rep(names(clusters), each=2), sep=".", rep(c("white","beige"), times=12))
+names(paired_clusters) = clu.cond_levels
+paired_clusters
 ```
 
 ### Read data
@@ -168,13 +183,261 @@ all.genes = row.names(sbs)
 table(Idents(sbs))
 ```
 
+### Read tables
+
+#### Cluster composition tables
+```{r}
+tss_cluster_test = read.delim(here(odir,"cluster_composition_test.tsv"))
+tss_cluster_test$cluster = factor(tss_cluster_test$cluster, levels=cluster_levels)
+head(tss_cluster_test)
+
+tcomp = read.delim(here(odir,"cluster_composition_condition_time.tsv"))
+time_per_cluster = group_by(tcomp, seurat_clusters, time) %>% summarise(n_cells = sum(n_cells)) %>% 
+  slice_max(n=1, order_by = n_cells) %>% mutate(cluster = paste0("t", seurat_clusters)) %>%
+    select(seurat_clusters, cluster, time)
+time_per_cluster
+```
+#### Marker genes
+
+```{r}
+tss.markers = read.delim(here(odir, "marker_genes.txt"))
+tss.markers$cluster = factor(paste0("t", tss.markers$cluster), levels = cluster_levels)
+tss.markers = merge(tss.markers, time_per_cluster, by="cluster")
+head(tss.markers)
+
+marker_go = read.delim(here(odir, "ORA_marker_genes.txt"))
+marker_go$cluster = factor(paste0("t", marker_go$cluster), levels = cluster_levels)
+marker_go =merge(marker_go, time_per_cluster[c("cluster","time")],by= "cluster")
+head(marker_go)
+```
+
+
+#### DE per cluster
+```{r}
+deg_clusters = read.delim(here(odir,"DE_per_cluster_wvb.tsv"))
+deg_clusters$cluster = factor(deg_clusters$cluster, levels=cluster_levels)
+head(deg_clusters)
+
+go_degclus = read.delim(here(odir,"DE_per_cluster_wvb_GO_terms.tsv"))
+go_degclus = go_degclus %>% mutate(cluster = factor(cluster, levels=cluster_levels),
+                                   condition = factor(condition, levels=c("white","beige")))
+head(go_degclus)
+```
+
+
 ## D: UMAPs
 
-```{r umap}
-DimPlot(sbs, group.by="time.condition", cols= pal, shuffle=T, label=F)
-DimPlot(sbs, cols= clusters, shuffle=T, label=F)
+```{r D_umap_time}
+sbs$cond.time = factor(sbs$cond.time, levels=c("white.day3","white.day1","asc.day0","beige.day1","beige.day3"))
+DimPlot(sbs, group.by="cond.time", cols=pal, shuffle=T, label=F) + 
+    geom_text(data=data.frame(), 
+              aes(label="day0", x=-10, y=4), colour=pal[3],
+              size=5) +
+    geom_text(data=data.frame(), 
+              aes(label="day1", x=-2, y=-8), colour=pal[4],
+              size=5) +
+    geom_text(data=data.frame(), 
+              aes(label="day3", x=-2, y=2), colour=pal[5],
+              size=5) +
+    labs(title=NULL)
+```
+
+
+```{r D_umap_cluster}
+DimPlot(sbs, cols= clusters, shuffle=T, label=F) + 
+    scale_color_manual(values=unname(clusters), labels=function(x)paste0("t",x), name="TSS cluster")
+
+DimPlot(sbs, cols= clusters, shuffle=T, label=T) + 
+    scale_color_manual(values=unname(clusters), labels=function(x)paste0("t",x), name="TSS cluster")
 ```
 
 ## E: Cluster comparison (column plots)
 
+```{r}
+to_plot = dplyr::rename(tss_cluster_test, prop_beige=prop, conf.int.1_beige=conf.int.1, conf.int.2_beige=conf.int.2)
+to_plot$prop_white = 1-to_plot$prop_beige
+to_plot$conf.int.1_white = to_plot$conf.int.1_beige + (to_plot$prop_white - to_plot$prop_beige)
+to_plot$conf.int.2_white = to_plot$conf.int.2_beige + (to_plot$prop_white - to_plot$prop_beige)
+to_plot = pivot_longer(to_plot, matches("white|beige"), 
+                       names_to = c(".value","condition"),
+                       names_pattern = "(.*)_(.*)",
+                     )
+to_plot = mutate(to_plot, 
+                 condition = factor(condition, levels=c("white","beige")),
+                 clu_pval_star = if_else(p.adjust < 0.01, paste(cluster, "**"),
+                                 if_else(p.adjust < 0.05, paste(cluster, "*"),
+                                         cluster)))
+to_plot$cond.time = paste(to_plot$condition, sep=".", to_plot$time)
+to_plot$cond.time = factor(to_plot$cond.time,
+                           levels=c("white.day1","white.day3","beige.day1","beige.day3"))
+to_plot$clu.cond = factor(paste(to_plot$cluster, sep=".", to_plot$condition),
+                          levels = names(paired_clusters))
+to_plot 
+```
 
+
+
+To do: Stars
+```{r E_wvb_proportion_test}
+ggplot(to_plot, aes(x=condition, fill=clu.cond, y=prop))  +
+    geom_hline(yintercept = 0.5, linewidth=0.4, colour="grey55") + 
+    geom_bar(position="dodge", stat='identity', show.legend = F) + 
+    geom_errorbar( aes(ymin=conf.int.1, ymax=conf.int.2), 
+                 position=position_dodge(0.9), width=0.4, linewidth=0.3, colour="black") +
+    facet_wrap(time~clu_pval_star,nrow=2, scales = "free_x")  +
+    scale_y_continuous(expand=c(0,0)) + 
+    scale_fill_manual(values=paired_clusters) +
+    labs(x=NULL, y="Proportion of cells") 
+```
+
+## F: Marker genes
+
+```{r}
+top.markers = tss.markers %>%
+            filter(!grepl("ADDG", gene) & time != "day0")  %>%
+    group_by(cluster) %>%
+    slice_max(n = 2, order_by = avg_log2FC)
+top.markers
+
+```
+
+```{r}
+top.markers$gene = factor(top.markers$gene, levels=rev(unique(top.markers$gene)))
+overlap.to.plot = filter(top.markers, gene %in% top.markers$gene)
+overlap.to.plot$gene = factor(overlap.to.plot$gene, levels=levels(top.markers$gene))
+
+ggplot(overlap.to.plot, aes(y=gene, size=avg_log2FC, color=cluster,
+                    x=cluster)) + 
+    geom_point(colour="black",aes(size = avg_log2FC +(avg_log2FC*0.25))) +
+    geom_point() + 
+    theme(axis.text.x=element_text(angle=30, hjust=1))  + 
+    scale_color_manual(values=clusters, guide="none") +
+    scale_size_continuous(breaks=c(2,4,6))+
+    facet_grid(~time, scales="free_x", space="free_x")+
+    labs(y="Top TSSs", x="TSS cluster", size="Mean\nlog_2FC")
+
+```
+
+```{r  F_top_markers_include_all}
+include_all_plot = filter(tss.markers, gene %in% overlap.to.plot$gene & 
+                              p_val_adj< 0.01 & time !="day0")
+include_all_plot$gene = factor(include_all_plot$gene, levels=levels(top.markers$gene))
+
+ggplot(include_all_plot, aes(x=cluster, y=gene, colour=cluster, size=avg_log2FC)) + 
+   geom_point(colour="black",aes(size = avg_log2FC +(avg_log2FC*0.25))) + 
+    geom_point() +
+    scale_color_manual(values=clusters, guide = "none") +
+  facet_grid(~time, scales="free_x", space="free_x")+
+    labs(y="Top TSSs", x="TSS cluster", size="Mean\nlog_2FC")
+```
+
+## G: GO terms 
+
+```{r go_replace}
+phrases= read.delim(here("data/gene_sets/abbreviations.txt"))
+recap= read.delim(here("data/gene_sets/capitalisations.txt"))
+```
+
+```{r abrev_go}
+drama_shorten = function(ont) {
+  for (x in 1:nrow(phrases)){
+    ont = gsub( phrases$phrase[x],phrases$abbreviation[x], ont, ignore.case = T)
+  }
+  a = abbreviate(gsub("_"," ", gsub("^[[:alpha:]]*_","",tolower(ont))),minlength=41, dot=T, named = F)
+  a = stringr::str_to_sentence(a)
+  for (i in 1:nrow(recap))
+    a = gsub(sprintf("\\b%s\\b", recap$lowercase[i]),recap$capital[i],a, ignore.case = T)
+  return(a)
+}
+```
+
+
+```{r go_wo_wpmf}
+go_to_plot = filter(marker_go, p.adjust < 0.01 & 
+                                !grepl("^MF", ID) & 
+                                time !="day0") %>% 
+    mutate(short_desc = drama_shorten(Description)) %>%
+    group_by(cluster) %>%
+    slice_min(n = 3, order_by = data.frame(p.adjust,pvalue))
+go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
+
+ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+    geom_point(colour="black",aes(size = Count +(Count*0.25)))  +
+    geom_point()+   
+    theme(axis.title.y = element_blank()) +
+    scale_color_manual(values=clusters, guide="none") + 
+    facet_grid(~time, scales="free_x", space = "free_x") 
+```
+
+## H: DE TSSs per cluster
+
+
+#### Filter out MT and unannotated
+
+```{r}
+nonmt = filter(deg_clusters, !grepl("^MT-|^ADDG", gene_names)) %>% group_by(cluster) %>% 
+  arrange(desc(abs(avg_log2FC)))
+table(nonmt$sig_cond, nonmt$cluster)
+beige = filter(nonmt, avg_log2FC > 0) %>% slice_max(n=3, order_by = avg_log2FC)
+white = filter(nonmt, avg_log2FC < 0) %>% slice_min( n=3, order_by = avg_log2FC)
+top_total = union(beige, white) # removes duplicates
+head(top_total)
+```
+
+
+
+```{r}
+#needed to sort gene names by cluster
+top_total = arrange(top_total, time, cluster, avg_log2FC)
+top_total$best_feature_name= factor(top_total$best_feature_name, levels=unique(rev(top_total$best_feature_name)))
+```
+
+### Plot BvW DE TSS
+```{r H_toptss_bvw}
+ggplot(top_total, aes(y=best_feature_name, colour=avg_log2FC, 
+                    x=cluster)) + 
+  geom_point(size=5) + 
+  scale_colour_gradient2(low="#1F78B4",mid="beige",high="#FF7F00"
+                        ) +  
+    theme( legend.title = element_text(size=13,hjust=0.5, vjust=4),
+        legend.key.height = rel(1.5)) +
+  facet_wrap(~time, scales = "free") + labs(y="DE TSSs",x="TSS cluster", colour="Mean\nlog_2FC") 
+```
+
+
+## I: GO per cluster
+
+```{r}
+go_to_plot = as.data.frame(go_degclus) %>% filter(p.adjust < 0.05 & Count > 3) %>% 
+              group_by(time,Cluster) %>%
+              slice_min(n = 2, order_by = data.frame(p.adjust, pvalue))
+go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
+
+ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=condition, size=Count,shape=p.adjust < 0.01)) + 
+  geom_point()+   
+  scale_color_manual(values=c("#1F78B4","#FF7F00")) + 
+    scale_size(name="Genes") +
+  scale_x_discrete(name="TSS clusters") +
+  facet_grid(condition~time, scales="free",space="free", axis.labels = ) +
+  theme( axis.title.y=element_blank(), strip.text.y = element_blank()) +
+  scale_shape_manual(name="Adj. p < ", labels=c("0.05","0.01"), values=c(1,19))
+```
+
+```{r go_bvw_coloured_all}
+go_to_plot$desc.cond = paste(go_to_plot$Description ,sep=".", go_to_plot$condition)
+include_all_plot = mutate(go_degclus,desc.cond = paste(Description, sep=".", condition)) %>%
+    filter(desc.cond %in% go_to_plot$desc.cond & 
+           Count >= 3 & p.adjust < 0.05)
+include_all_plot$short_desc = factor(include_all_plot$short_desc, levels=levels(go_to_plot$short_desc))
+
+ggplot(include_all_plot, 
+       aes(x=cluster, y=short_desc, colour=condition, 
+           size=Count,shape=p.adjust < 0.01)) + 
+  geom_point()+   
+  scale_color_manual(values=c("#1F78B4","#FF7F00")) + 
+    scale_size(name="Genes") +
+  scale_x_discrete(name="TSS clusters") +
+  facet_grid(condition~time, scales="free",space="free", axis.labels = ) +
+  theme(axis.title.y=element_blank(), strip.text.y = element_blank()) +
+  scale_shape_manual(name="Adj. p < ", labels=c("0.05","0.01"), values=c(1,19))
+```

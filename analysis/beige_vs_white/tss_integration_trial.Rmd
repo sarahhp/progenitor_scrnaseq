@@ -1,0 +1,212 @@
+---
+title: "tss_integration_trial"
+output: html_document
+---
+
+
+Integrate time points using RPCA, FastMNN and Harmony.  Key is not to integrate out differences between white and beige cells.  
+
+
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(Seurat)
+library(SeuratWrappers)
+library(dplyr)
+library(ggplot2)
+library(ggsci)
+library(here)
+library(patchwork)
+```
+
+```{r params}
+module = "beige_vs_white"
+dataname = "tss_integration_trial"
+load_data = T #loading data
+subset_data = F
+
+rmd_filename = "tss_integration_trial"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+indir = here("output", module, "tss_bvw_initial")
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#1F78B4", "#85C2EA","#B3B3B3", "#F18486","#E31A1C")
+clusters = tvthemes::gravityFalls_pal()(13)
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+## Read data
+
+```{r}
+if (subset_data){
+  sbs = readRDS(here(indir, "10%_complete_analysis.rds"))
+  Idents(sbs) = "seurat_clusters"
+} else {
+  sbs = readRDS(here(indir, "complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+sbs[["RNA"]] =split(sbs[["RNA"]], f = sbs$time)
+sbs = FindVariableFeatures(sbs, nfeatures = 2000)
+sbs
+```
+
+
+```{r}
+sbs$initial_clusters = sbs$seurat_clusters
+sbs[["initial.umap"]] = sbs[["umap"]]
+sbs[["initial.tsne"]] = sbs[["tsne"]]
+```
+
+```{r}
+DimPlot(sbs, cols=clusters, label=T)
+```
+
+
+## RPCA Integration
+
+```{r setup-variables-rpca}
+method_name="rpca"
+red_name = paste("pca", sep=".", method_name)
+umap_name = paste("umap", sep=".", method_name)
+clu_name = paste( method_name, sep="_", "clusters")
+tsne_name = paste("tsne", sep=".", method_name)
+```
+
+```{r}
+sbs = IntegrateLayers(sbs, method= RPCAIntegration, orig.reduction = "pca",
+                       new.reduction = red_name, 
+                      assay = "RNA", scale.layer="scale.data", layers="data"
+                      )
+```
+
+```{r basic_analysis}
+sbs <- FindNeighbors(sbs, reduction =  red_name, dims = 1:30, verbose=F)
+sbs <- FindClusters(sbs, resolution = 0.5, cluster.name =  clu_name)
+sbs <- RunUMAP(sbs, reduction = red_name, dims = 1:30, reduction.name = umap_name)
+```
+
+```{r}
+DimPlot(sbs, reduction = umap_name,  group.by = clu_name, label=T, cols=clusters)
+DimPlot(sbs, reduction = umap_name,  group.by = "orig.ident", cols=pal)
+DimPlot(sbs, reduction = umap_name,  group.by = "initial_clusters", label=T, cols=clusters)
+DimPlot(sbs, reduction = "initial.umap",  group.by = clu_name, label=T, cols=clusters)
+```
+
+```{r}
+sbs = RunTSNE(sbs, reduction = red_name, dims = 1:30, reduction.name = tsne_name)
+```
+
+```{r}
+DimPlot(sbs, reduction = tsne_name,  group.by = clu_name, label=T, cols=clusters)
+DimPlot(sbs, reduction = tsne_name,  group.by = "orig.ident", cols=pal)
+DimPlot(sbs, reduction = tsne_name,  group.by = "initial_clusters", label=T, cols=clusters)
+DimPlot(sbs, reduction = "initial.tsne",  group.by = clu_name, label=T, cols=clusters)
+```
+
+## Harmony Integration
+
+```{r setup-variables-harmony}
+method_name="harmony"
+red_name = paste("pca", sep=".", method_name)
+umap_name = paste("umap", sep=".", method_name)
+clu_name = paste( method_name, sep="_", "clusters")
+tsne_name = paste("tsne", sep=".", method_name)
+```
+
+```{r}
+sbs = IntegrateLayers(sbs, method= HarmonyIntegration, orig.reduction = "pca",
+                       new.reduction = red_name)
+```
+
+```{r}
+sbs <- FindNeighbors(sbs, reduction =  red_name, dims = 1:30, verbose=F)
+sbs <- FindClusters(sbs, resolution = 0.5, cluster.name =  clu_name)
+sbs <- RunUMAP(sbs, reduction = red_name, dims = 1:30, reduction.name = umap_name)
+```
+
+
+```{r}
+DimPlot(sbs, reduction = umap_name,  group.by = clu_name, label=T, cols=clusters)
+DimPlot(sbs, reduction = umap_name,  group.by = "orig.ident", cols=pal)
+DimPlot(sbs, reduction = umap_name,  group.by = "initial_clusters", label=T, cols=clusters)
+DimPlot(sbs, reduction = "initial.umap",  group.by = clu_name, label=T, cols=clusters)
+```
+
+```{r}
+sbs = RunTSNE(sbs, reduction = red_name, dims = 1:30, reduction.name = tsne_name)
+```
+
+```{r}
+DimPlot(sbs, reduction = tsne_name,  group.by = clu_name, label=T, cols=clusters)
+DimPlot(sbs, reduction = tsne_name,  group.by = "orig.ident", cols=pal)
+DimPlot(sbs, reduction = tsne_name,  group.by = "initial_clusters", label=T, cols=clusters)
+DimPlot(sbs, reduction = "initial.tsne",  group.by = clu_name, label=T, cols=clusters)
+```
+
+## FastMNN
+
+```{r setup-variables-fastmnn}
+method_name="fastmnn"
+red_name = paste("pca", sep=".", method_name)
+umap_name = paste("umap", sep=".", method_name)
+clu_name = paste( method_name, sep="_", "clusters")
+tsne_name = paste("tsne", sep=".", method_name)
+```
+
+```{r}
+sbs = IntegrateLayers(sbs, method= FastMNNIntegration, orig.reduction = "pca",
+                       new.reduction = red_name)
+```
+
+```{r}
+sbs <- FindNeighbors(sbs, reduction =  red_name, dims = 1:30, verbose=F)
+sbs <- FindClusters(sbs, resolution = 0.5, cluster.name =  clu_name)
+sbs <- RunUMAP(sbs, reduction = red_name, dims = 1:30, reduction.name = umap_name)
+```
+
+
+```{r}
+DimPlot(sbs, reduction = umap_name,  group.by = clu_name, label=T, cols=clusters)
+DimPlot(sbs, reduction = umap_name,  group.by = "orig.ident", cols=pal)
+DimPlot(sbs, reduction = umap_name,  group.by = "initial_clusters", label=T, cols=clusters)
+DimPlot(sbs, reduction = "initial.umap",  group.by = clu_name, label=T, cols=clusters)
+```
+
+```{r}
+sbs = RunTSNE(sbs, reduction = red_name, dims = 1:30, reduction.name = tsne_name)
+```
+
+```{r}
+DimPlot(sbs, reduction = tsne_name,  group.by = clu_name, label=T, cols=clusters)
+DimPlot(sbs, reduction = tsne_name,  group.by = "orig.ident", cols=pal)
+DimPlot(sbs, reduction = tsne_name,  group.by = "initial_clusters", label=T, cols=clusters)
+DimPlot(sbs, reduction = "initial.tsne",  group.by = clu_name, label=T, cols=clusters)
+```
+
+```{r save}
+if (subset_data == FALSE){
+  saveRDS(sbs, file = here(odir, "complete_analysis.rds"))
+  sub = subset(sbs, downsample=1000)
+  saveRDS(sub,here(odir, "10%_complete_analysis.rds"))
+} else if (subset_data){ #if subset, don't save complete analysis
+  saveRDS(sbs,here(odir, "10%_subset_analysis.rds"))
+}
+```

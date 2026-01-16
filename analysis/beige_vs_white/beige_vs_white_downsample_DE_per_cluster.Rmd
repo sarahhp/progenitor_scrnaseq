@@ -51,7 +51,7 @@ theme_hp = theme_classic(base_size = 15) +
         strip.background = element_blank())
 theme_set(theme_hp)
 pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486", "#E31A1C")
-clusters =   tvthemes::gravityFalls_pal()(13)
+clusters =   MetBrewer::met.brewer("Redon", 12)
 spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
 ```
 
@@ -83,7 +83,7 @@ time_per_cluster = group_by(tcomp, seurat_clusters, time) %>% summarise(n_cells 
   slice_max(n=1, order_by = n_cells) %>% select(seurat_clusters, time)
 time_per_cluster
 ```
-
+### DEG tests
 
 ```{r}
 clusters_to_plot = filter(time_per_cluster, time != "day0") %>% pull(seurat_clusters)
@@ -116,6 +116,8 @@ head(merged.table)
 table(merged.table$sig_cond, merged.table$cluster)
 ```
 
+## Non Mt genes
+
 ```{r}
 nonmt = filter(merged.table, !grepl("MT-", gene_name))
 top_nonmt = group_by(nonmt, cluster) %>% arrange(avg_log2FC) 
@@ -131,7 +133,7 @@ top_total = arrange(top_total, time, cluster, avg_log2FC)
 top_total$gene_name = factor(top_total$gene_name, levels=unique(top_total$gene_name))
 ```
 
-
+### DEGs Plot
 ```{r nomt_de_per_cluster}
 n = ggplot(top_total, aes(y=gene_name, colour=avg_log2FC, 
                     x=cluster)) + 
@@ -239,6 +241,7 @@ dotplot(go_nonmt, showCategory=2, x="cluster", includeAll=F)+
   theme(axis.text.y=element_text(size=10))+ facet_grid(~time, scales="free", space = "free") + theme_hp
 ```
 
+## Write
 
 ```{r}
 write.table(merged.table, here(odir, "DE_per_cluster_white_vs_beige.tsv"), sep="\t", quote=F, row.names = F)

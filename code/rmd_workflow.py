@@ -146,7 +146,7 @@ rule progenitors_scvi:
         anndata = SCVI_DIR + "/complete_analysis.scviintegrated.h5ad",
         rmd = PRO_ADIR + "/progenitors_scvi_integration.Rmd"
     output:
-        report = PRO_ADIR + "/progenitors_integration_trial.html",
+        report = PRO_ADIR + "/progenitors_scvi_integration.html",
         rdata = SCVI_DIR + "/complete_analysis.rds",
         subset_rdata = SCVI_DIR + "/10%_complete_analysis.rds",
     params:
@@ -455,20 +455,70 @@ rule figure5:
         #Tss level (beige vs white)
         rdata = TSS_DIR + "/complete_analysis.rds",#D
         result = TSS_DIR + "/cluster_composition_test.tsv",#E
-        marker_genes = TSS_DIR + "/marker_genes.txt",#F #remove day0
-        GO_table =  TSS_DIR +"/ORA_marker_genes.txt",#G #remove day0
+        marker_genes = TSS_DIR + "/marker_genes.txt",#F 
+        cluster_info = TSS_DIR + "/cluster_composition_condition_time.tsv", #for cluster annot
+        GO_table =  TSS_DIR +"/ORA_marker_genes.txt",#G 
         tdeg = TSS_DIR + "/DE_per_cluster_wvb.tsv",#H
         go = TSS_DIR + "/DE_per_cluster_wvb_GO_terms.tsv",#I
         rmd = "figures/figure5_beige_vs_white.Rmd"
     output:
-        report = "figures/figure5_beige_vs_white_adipogenesis.html"
+        report = "figures/figure5_beige_vs_white.html"
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
         "{params.cmd}" 
 
+##-------------------------------------------------##
+##             Progenitor trajectories             ##
+##              in early adipogenesis              ##
+##-------------------------------------------------##
 
+ODIR = "output/beige_vs_white/tss_integration_trial"
 
+rule tss_integration_trial:
+    '''Status: Migrated
+    Supp FigS8'''
+    input:
+        rdata = TSS_DIR + "/complete_analysis.rds",
+        rmd = ADIR + "/tss_integration_trial.Rmd"
+    output:
+        rdata = ODIR + "/complete_analysis.rds",
+        subset_rdata = ODIR + "/10%_complete_analysis.rds",
+        report = ADIR + "/tss_integration_trial.html",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"  
+    
+        
+ODIR = "output/beige_vs_white/tss_fastmnn"
+        
+rule tss_fastmnn_integration:
+    '''Status:  migrated'''
+    input:
+        rdata = TSS_DIR + "/complete_analysis.rds",
+        rmd = ADIR + "/tss_fastmnn_integration.Rmd"
+    output:
+        rdata = ODIR + "/complete_analysis.rds",
+        marker_genes = ODIR + "/marker_genes.txt",
+        GO_table =  ODIR +"/ORA_marker_genes.txt",
+        cluster_info = ODIR + "/cluster_composition.tsv",
+        report = ADIR + "/tss_fastmnn_integration.html",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}" 
+
+rule figure6:
+    input:
+        rdata = ODIR + "/complete_analysis.rds",#A umap integrated TSS clusters
+        rmd = "figures/figure6_trajectories.Rmd"
+    output:
+        report = "figures/figure6_trajectories.html"
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"        
 
 
 

@@ -26,3 +26,4 @@ the_citric_acid
 transforming_growth_factor_beta	TGFb
 positive_regulation_of	Pos._reg.
 Extracellular_matrix_structural	ECM_structural
+_dn	_down
