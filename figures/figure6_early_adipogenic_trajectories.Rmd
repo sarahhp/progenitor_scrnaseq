@@ -1,0 +1,69 @@
+---
+title: "figure6_early_adipogenic_trajectories"
+author: "Sarah Hazell Pickering"
+date: "2026-01-19"
+output: html_document
+---
+
+# Figure 6
+
+
+
+## Setup
+
+
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(Seurat)
+library(clusterProfiler)
+library(dplyr)
+library(enrichplot)
+library(ggplot2)
+library(ggrepel)
+library(here)
+library(tidyr)
+```
+
+```{r global_params}
+load_data = T #loading data
+subset_data = F
+
+rmd_filename = "figure6_early_adipogenic_trajectories"
+i_am(file.path("figures", paste0(rmd_filename,".Rmd")))
+```
+
+```{r setup}
+set.seed(8)
+fig_dir = here("figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank(),
+        #Add facet boxes
+        panel.border=element_rect(colour="lightgrey", fill=NA),
+        #Add black border to colourbar legends
+        legend.ticks = element_line(colour="black", linewidth=0.25),
+        legend.frame = element_rect(colour="black", linewidth = 0.25),
+        legend.title = element_text(size=13,hjust=0.5))
+theme_set(theme_hp)
+pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486", "#E31A1C")
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+## TSS level trajectories
+```{r tss_setup}
+module = "beige_vs_white"
+dataname="tss_fastmnn"
+odir = here("output", module, dataname)
+clusters =   tvthemes::gravityFalls_pal()(13)
+```
+
+## A UMAP with trajectory
+

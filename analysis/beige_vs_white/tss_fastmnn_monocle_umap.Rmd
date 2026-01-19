@@ -20,14 +20,15 @@ library(viridis)
 
 ```{r params}
 module = "beige_vs_white"
-dataname = paste0("tss_bvw_",method_name)
+method_name = "fastmnn"
+dataname = paste0("tss_",method_name)
 load_data = T #loading data
 subset_data = F
 
 rmd_filename = "tss_fastmnn_monocle_umap"
 i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
 odir = here("output", module, dataname)
-method_name = "fastmnn"
+
 ```
 
 
@@ -48,48 +49,11 @@ theme_hp = theme_classic(base_size = 15) +
         axis.ticks = element_line(linewidth = 0.25),
         strip.background = element_blank())
 theme_set(theme_hp)
-pal = c("#B3B3B3","#85C2EA","#B2DF8A","#1F78B4")
 clusters = tvthemes::gravityFalls_pal()(13)
+names(clusters) = 0:11
 spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
 ```
 
-
-```{r params}
-module="adipogenesis"
-method_name="fastmnn"
-dataname = paste0("tss_bvw_",method_name)
-
-library(here); i_am(file.path("analysis", paste0(dataname,"_monocle_umap.Rmd")))
-
-odir = here("output", module, dataname)
-
-load_data = T #loading data 
-subset_data = F
-```
-
-
-```{r libs, warning=F, message=F, echo=F}
-library(dplyr)
-library(ggplot2)
-library(Seurat)
-library(BPCells)
-library(monocle3)
-library(viridis)
-```
-
-
-```{r themes}
-pal = c("#B3B3B3","#85C2EA","#B2DF8A","#1F78B4")
-clusters = tvthemes::gravityFalls_pal()(13)
-names(clusters) = 0:11
-spectral = rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
-theme_hp = theme_classic(base_size=15) + 
-		  theme(axis.line = element_line(linewidth = 0.25),
-		        axis.ticks = element_line(linewidth=0.25),
-		        strip.background = element_blank(), # remove boxes around facet labels
-		        )
-theme_set(theme_hp)
-```
 
 ```{r}
 if (subset_data){

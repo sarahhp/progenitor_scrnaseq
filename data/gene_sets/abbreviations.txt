@@ -27,3 +27,4 @@ transforming_growth_factor_beta	TGFb
 positive_regulation_of	Pos._reg.
 Extracellular_matrix_structural	ECM_structural
 _dn	_down
+ACTIVITY_ACTING_ON_THE_CH_CH_GROUP_OF_DONORS_NAD_OR_NADP_AS_ACCEPTOR	ACTIVITY_ON_CH_GROUP

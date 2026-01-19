@@ -106,9 +106,6 @@ to_plot$clu.cond.time = paste(to_plot$cluster, sep=".", to_plot$cond.time)
 to_plot 
 ```
 
-
-
-To do: Stars on b5 and b2
 ```{r B_wvb_proportion_test}
 ggplot(to_plot, aes(x=condition, fill=clu.cond.time, y=prop))  +
   geom_hline(yintercept = 0.5, linewidth=0.4, colour="grey55") + 

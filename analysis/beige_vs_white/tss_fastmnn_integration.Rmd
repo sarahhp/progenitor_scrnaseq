@@ -14,6 +14,7 @@ output: html_document
 library(BPCells)
 library(RColorBrewer)
 library(Seurat)
+library(SeuratWrappers)
 library(clusterProfiler)
 library(dplyr)
 library(enrichplot)
@@ -33,7 +34,7 @@ subset_data = F
 rmd_filename = "tss_fastmnn_integration"
 i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
 odir = here("output", module, dataname)
-indir = here("output", module, "tss_initial")
+indir = here("output", module, "tss_bvw_initial")
 ```
 
 
@@ -77,8 +78,20 @@ if (subset_data){
   DefaultAssay(sbs) = "RNA"
 }
 table(Idents(sbs))
-head(sbs@meta.data)
+sbs[["RNA"]] =split(sbs[["RNA"]], f = sbs$time)
+sbs = FindVariableFeatures(sbs, nfeatures = 2000)
 sbs
+```
+
+
+```{r}
+sbs$initial_clusters = sbs$seurat_clusters
+sbs[["initial.umap"]] = sbs[["umap"]]
+sbs[["initial.tsne"]] = sbs[["tsne"]]
+```
+
+```{r}
+DimPlot(sbs, cols=clusters, label=T)
 ```
 
 

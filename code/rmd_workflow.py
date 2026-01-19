@@ -158,7 +158,6 @@ rule progenitors_scvi:
 rule progenitors_rpca_clustree:
     ''' 
     Status: Complete
-    Harmony, FastMNN and RPCA integrations
     '''
     input:
         rdata = ODIR + "/complete_analysis.rds",
@@ -345,10 +344,19 @@ rule beige_vs_white_downsample:
 #rule bvw_markers_and_go:
 # '''Status: Migrated'''
 
-#rule bvw_DE_per_time:
-# '''Status: Migrated'''
-#   output:
-#       de = expand("{dir}/DE_{time}_wvb.tsv",dir=ODIR,time=["day1","day3"])
+rule bvw_DE_per_time:
+ '''Status: Migrated'''
+    input:
+        rdata = ODIR + "/complete_analysis.rds",
+        rmd = ADIR + "/beige_vs_white_downsample_DE_per_time.Rmd"
+    output:
+        sc_DE_per_time = expand("{dir}/DE_{time}_wvb.tsv",
+            dir=ODIR,time=["day1","day3"]),
+        report = ADIR + "/beige_vs_white_downsample_DE_per_time.html"
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"  
 
 rule bvw_cluster_tests:
     '''Status: Migrated '''
@@ -379,6 +387,25 @@ rule bvw_DE_per_cluster:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
         "{params.cmd}" 
+
+rule supp_figure5:
+    input:
+        rdata = ODIR + "/complete_analysis.rds",#B UMAP
+        marker_genes = ODIR + "/marker_genes.txt", #C
+        GO_table =  ODIR +"/ORA_marker_genes.txt", #D
+        cluster_info = ODIR + "/cluster_composition_test.tsv",#new E
+        sc_DE_per_time = expand("{dir}/DE_{time}_wvb.tsv",
+                                dir = ODIR, 
+                                time = ["day1","day3"]), #F per time volcano
+                                #G bulk per time
+                                #H no. DEG per cluster
+        rmd = "figures/supp_figS5_beige_vs_white-gene_level.Rmd"
+    output:
+        report = "figures/supp_figS5_beige_vs_white-gene_level.html"
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"  
         
 ##-------------------------------------------------##
 ##                  TSS-level analysis             ##
@@ -508,13 +535,29 @@ rule tss_fastmnn_integration:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
         "{params.cmd}" 
+        
+rule tss_fastmnn_monocle:
+    '''Status:  migrated'''
+    input:
+        rdata = ODIR + "/complete_analysis.rds",
+        rmd = ADIR + "/tss_fastmnn_integration.Rmd"
+    output:
+        white = ODIR + "/white_monocle_complete_analysis_umap.rds",
+        beige = ODIR + "/beige_monocle_complete_analysis_umap.rds",
+        report = ADIR + "/tss_fastmnn_integration.html",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}" 
 
 rule figure6:
     input:
         rdata = ODIR + "/complete_analysis.rds",#A umap integrated TSS clusters
-        rmd = "figures/figure6_trajectories.Rmd"
+        rmd = "figures/figure6_early_adipogenic_trajectories.Rmd",
+                white = ODIR + "/white_monocle_complete_analysis_umap.rds",
+        beige = ODIR + "/beige_monocle_complete_analysis_umap.rds",
     output:
-        report = "figures/figure6_trajectories.html"
+        report = "figures/figure6_early_adipogenic_trajectories.html"
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
