@@ -528,8 +528,21 @@ rule tss_integration_trial:
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
-        "{params.cmd}"  
-    
+        "{params.cmd}"
+        
+        
+rule supp_figS10:
+    '''tss_integration_trial'''
+    input:
+        rdata = ODIR + "/complete_analysis.rds",
+        rmd = ADIR + "/supp_figS10_tss_integration_trial.Rmd"
+    output:
+        report = ADIR + "/supp_figS10_tss_integration_trial.html"
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"
+        
         
 ODIR = "output/beige_vs_white/tss_fastmnn"
         
