@@ -425,6 +425,12 @@ DimPlot(sbs, reduction="tsne", group.by= "time.progen_clusters", label=F, shuffl
 
 ## Save
 
+```{r}
+sbs[["umap"]] = sbs[[umap_name]]
+sbs[["tsne"]] = sbs[[tsne_name]]
+```
+
+
 ```{r save}
 if (subset_data == F){
   saveRDS(sbs, file = here(odir, "complete_analysis.rds"))
