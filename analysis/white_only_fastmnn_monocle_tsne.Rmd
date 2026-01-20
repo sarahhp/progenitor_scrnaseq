@@ -30,7 +30,7 @@ library(viridis)
 ```
 
 ```{r themes}
-pal = c("#B3B3B3","#85C2EA","#B2DF8A","#1F78B4")
+pal = c("#B3B3B3","#85C2EA","#1F78B4")
 clusters = ggsci::pal_simpsons()(13)[c(1:7,9:13)]
 
 theme_hp = theme_classic(base_size=15) + 
