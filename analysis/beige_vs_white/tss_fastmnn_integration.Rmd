@@ -5,8 +5,7 @@ date: "2024-04-11"
 output: html_document
 ---
 
-
-1. Simplify object from integration trial to include only FASTMNN and save
+1. Integrate using FAstmnn
 2. Find marker genes and GO terms for new FASTMNN clusters
 
 
@@ -93,7 +92,7 @@ sbs[["initial.tsne"]] = sbs[["tsne"]]
 ```{r}
 DimPlot(sbs, cols=clusters, label=T)
 ```
-
+## Integrate layers
 
 ```{r setup-variables-fastmnn}
 method_name="fastmnn"
@@ -192,6 +191,7 @@ Min.pct sets the minimum percentage of cells for a marker to be found in
 
 Does densify, which increases speed at the cost of memory help?  
 ```{r densify}
+sbs = JoinLayers(sbs)
 norm.markers = FindAllMarkers(sbs, only.pos = T, min.pct=0.25, 
                               logfc.threshold = 0.5, densify=T)
 norm.markers = merge(norm.markers,

@@ -141,7 +141,7 @@ include: "run_scvi.py"
 SCVI_DIR = "output/progenitors/scvi_integration"
 
 rule progenitors_scvi:
-    '''Status: in dev'''
+    '''Status: Complete'''
     input:
         anndata = SCVI_DIR + "/complete_analysis.scviintegrated.h5ad",
         rmd = PRO_ADIR + "/progenitors_scvi_integration.Rmd"
@@ -153,6 +153,11 @@ rule progenitors_scvi:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
         "{params.cmd}"  
+        
+rule supp_figS2_integration_trial:
+    input:
+        rdata = SCVI_DIR + "/complete_analysis.rds",
+    
        
 #Trial clustering at different resolutions
 rule progenitors_rpca_clustree:
@@ -521,7 +526,7 @@ rule tss_integration_trial:
 ODIR = "output/beige_vs_white/tss_fastmnn"
         
 rule tss_fastmnn_integration:
-    '''Status:  migrated'''
+    '''Status:  Knitting...'''
     input:
         rdata = TSS_DIR + "/complete_analysis.rds",
         rmd = ADIR + "/tss_fastmnn_integration.Rmd"
@@ -540,11 +545,11 @@ rule tss_fastmnn_monocle:
     '''Status:  migrated'''
     input:
         rdata = ODIR + "/complete_analysis.rds",
-        rmd = ADIR + "/tss_fastmnn_integration.Rmd"
+        rmd = ADIR + "/tss_fastmnn_monocle_umap.Rmd"
     output:
         white = ODIR + "/white_monocle_complete_analysis_umap.rds",
         beige = ODIR + "/beige_monocle_complete_analysis_umap.rds",
-        report = ADIR + "/tss_fastmnn_integration.html",
+        report = ADIR + "/tss_fastmnn_monocle_umap.html",
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
@@ -552,10 +557,10 @@ rule tss_fastmnn_monocle:
 
 rule figure6:
     input:
-        rdata = ODIR + "/complete_analysis.rds",#A umap integrated TSS clusters
-        rmd = "figures/figure6_early_adipogenic_trajectories.Rmd",
-                white = ODIR + "/white_monocle_complete_analysis_umap.rds",
+        #A umap integrated TSS clusters
+        white = ODIR + "/white_monocle_complete_analysis_umap.rds",
         beige = ODIR + "/beige_monocle_complete_analysis_umap.rds",
+        rmd = "figures/figure6_early_adipogenic_trajectories.Rmd",
     output:
         report = "figures/figure6_early_adipogenic_trajectories.html"
     params:

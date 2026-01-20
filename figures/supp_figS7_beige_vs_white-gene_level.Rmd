@@ -1,0 +1,277 @@
+---
+title: "supp_figS7_beige_vs_white-gene_level"
+author: "Sarah Hazell Pickering"
+date: "2026-01-15"
+output: html_document
+---
+
+Beige vs White early adipogenesis analyed at the gene level
+
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(Seurat)
+library(clusterProfiler)
+library(dplyr)
+library(enrichplot)
+library(ggplot2)
+library(ggrepel)
+library(here)
+library(tidyr)
+```
+
+```{r params}
+module = "beige_vs_white"
+dataname = "downsample"
+load_data = T #loading data
+subset_data = F
+
+rmd_filename = "supp_figS7_beige_vs_white-gene_level"
+i_am(file.path("figures", paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486", "#E31A1C")
+clusters = MetBrewer::met.brewer("Redon", 12)
+paired_clusters = c(rbind(colorspace::darken(clusters, amount=0.3),
+                    colorspace::lighten(clusters, amount=0.3)))
+cluster_levels = c("b3","b11","b8","b9","b6","b0","b7","b10","b5","b1","b2","b4")
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+## Read data
+
+```{r}
+if (subset_data){
+  sbs = readRDS(here(odir, "10%_complete_analysis.rds"))
+} else {
+  sbs = readRDS(here(odir, "complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+Idents(sbs) = "seurat_clusters"
+sbs
+all.genes = row.names(sbs)
+table(Idents(sbs))
+```
+
+
+## A: Downsampling summary
+
+![Supp FigS5 A upper](analysis/beige_vs_white/figures/beige_vs_white_downsample/no_cells_presbs-1.png)
+![Supp FigS5 A lower](analysis/beige_vs_white/figures/beige_vs_white_downsample/no_cells_dwns-1.png)
+
+## B: UMAPs
+
+```{r B_umap}
+DimPlot(sbs, cols= clusters, shuffle=T) +
+    scale_color_manual(values=unname(clusters), labels=function(x)paste0("b",x), name="Beige & white\ncluster")
+DimPlot(sbs, cols= clusters, shuffle=T, label=T)  +
+    scale_color_manual(values=unname(clusters), labels=function(x)paste0("b",x), name="Beige & white\ncluster")
+DimPlot(sbs, group.by="cond.time", cols= pal, shuffle=T) + labs(title = NULL, colour="Sample") +
+        geom_text(data=data.frame(), 
+              aes(label="day0", x=-10, y=4), colour=pal[3],
+              size=5) +
+    geom_text(data=data.frame(), 
+              aes(label="day1", x=-2, y=-8), colour=pal[4],
+              size=5) +
+    geom_text(data=data.frame(), 
+              aes(label="day3", x=-2, y=2), colour=pal[5],
+              size=5) 
+```
+## C: Marker Gene plot
+
+```{r}
+norm.markers = read.delim(here(odir, "marker_genes.txt"))
+norm.markers$cluster = factor(norm.markers$cluster, levels=0:max(as.integer(norm.markers$cluster)))
+head(norm.markers)
+
+filt.markers = as.data.frame(norm.markers %>% filter( pct.1 > 0.5) %>%
+    arrange(avg_log2FC))
+```
+
+Add major time per cluster
+```{r}
+tcomp = read.delim(here(odir, "cluster_composition.txt"))
+time_per_cluster = group_by(tcomp, seurat_clusters, time) %>% summarise(n_cells = sum(n_cells)) %>% 
+  slice_max(n=1, order_by = n_cells) %>% select(seurat_clusters, time)
+time_per_cluster
+filt.markers = merge(filt.markers, time_per_cluster, by.x="cluster", by.y="seurat_clusters")
+head(filt.markers)
+```
+
+```{r}
+top.markers = as.data.frame(filt.markers %>% group_by(time,cluster) %>%
+    slice_max(n = 2, order_by = avg_log2FC))
+top.markers
+```
+
+
+### plot
+```{r marker_gene_by_time}
+top.markers$gene = factor(top.markers$gene, levels=rev(unique(top.markers$gene)))
+overlap.to.plot = filter(top.markers, gene %in% top.markers$gene)
+overlap.to.plot$gene = factor(overlap.to.plot$gene, levels=levels(top.markers$gene))
+
+ggplot(overlap.to.plot, aes(y=gene, size=abs(avg_log2FC), color=cluster,
+                    x=cluster)) + 
+    geom_point(colour="black",aes(size = avg_log2FC*1.5)) + geom_point() +
+    scale_color_manual(values=clusters, guide="none") + 
+    facet_grid(~time, scales="free_x", space="free_x") +
+    scale_x_discrete(labels = function(x){paste0("b",x)}) +
+    labs(size="Mean\nlog_2FC", x= "Beige & white clusters", y="Marker genes")
+    
+```
+
+
+## D GO plot
+
+```{r}
+marker_go = read.delim(here(odir, "ORA_marker_genes.txt"))
+marker_go$cluster = factor(paste0("b",marker_go$cluster), levels=cluster_levels)
+head(marker_go)
+```
+
+
+
+```{r go_replace}
+phrases= read.delim(here("data/gene_sets/abbreviations.txt"))
+recap= read.delim(here("data/gene_sets/capitalisations.txt"))
+```
+
+
+```{r abrev_go}
+drama_shorten = function(ont) {
+  for (x in 1:nrow(phrases)){
+    ont = gsub( phrases$phrase[x],phrases$abbreviation[x], ont, ignore.case = T)
+  }
+  a = abbreviate(gsub("_"," ", gsub("^[[:alpha:]]*_","",tolower(ont))),minlength=41, dot=T, named = F)
+  a = stringr::str_to_sentence(a)
+  for (i in 1:nrow(recap))
+    a = gsub(sprintf("\\b%s\\b", recap$lowercase[i]),recap$capital[i],a, ignore.case = T)
+  return(a)
+}
+```
+
+```{r}
+marker_go = mutate(marker_go, short_desc = drama_shorten(Description))
+go_to_plot = filter(marker_go, p.adjust < 0.01 & time != "day0" & 
+                        !grepl("EPITHELIAL_MESENCHYMAL", ID )) %>% group_by(time, cluster) %>%
+              slice_min(n = 2, order_by = data.frame(p.adjust, pvalue)) 
+go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
+go_to_plot$ID
+```
+### plot
+
+```{r E:cluster_go}
+ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+   geom_point(colour="black",aes(size = Count*1.5)) + geom_point() +
+    scale_color_manual(values=clusters, guide="none")+ 
+  labs(y=NULL, x="beige vs white cluster") + 
+    facet_grid(~time, scales="free_x", space = "free_x")
+```
+
+```{r cluster_go_overlapping}
+include_all_plot = filter(marker_go, Description %in% go_to_plot$Description & p.adjust < 0.01 &
+                              time != "day0")
+include_all_plot$short_desc = factor(include_all_plot$short_desc,
+                                     levels=levels(go_to_plot$short_desc))
+ggplot(include_all_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point(colour="black",aes(size = Count*1.5)) + geom_point()+
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +scale_color_manual(values=clusters) +
+    facet_grid(~time, scales="free_x", space = "free_x")
+```
+## E: Full Cluster composition test  **new**
+
+```{r}
+cluster_test_gene = read.delim(here(odir,"cluster_composition_test.tsv"))
+cluster_test_gene$cluster = factor(cluster_test_gene$cluster, levels=cluster_levels)
+head(cluster_test_gene)
+```
+
+```{r}
+to_plot = dplyr::rename(cluster_test_gene, prop_beige=prop, conf.int.1_beige=conf.int.1, conf.int.2_beige=conf.int.2)
+to_plot$prop_white = 1-to_plot$prop_beige
+to_plot$conf.int.1_white = to_plot$conf.int.1_beige + (to_plot$prop_white - to_plot$prop_beige)
+to_plot$conf.int.2_white = to_plot$conf.int.2_beige + (to_plot$prop_white - to_plot$prop_beige)
+to_plot = pivot_longer(to_plot, matches("white|beige"), 
+                       names_to = c(".value","condition"),
+                       names_pattern = "(.*)_(.*)",
+                     )
+to_plot = mutate(to_plot, 
+                 condition = factor(condition, levels=c("white","beige")),
+                 clu_pval_star = if_else(p.adjust < 0.01, paste(cluster, "**"),
+                                 if_else(p.adjust < 0.05, paste(cluster, "*"),
+                                         cluster)))
+to_plot$cond.time = paste(to_plot$condition, sep=".", to_plot$time)
+to_plot$cond.time = factor(to_plot$cond.time, levels=c("white.day1","white.day3","beige.day1","beige.day3"))
+to_plot$clu.cond.time = paste(to_plot$cluster, sep=".", to_plot$cond.time)
+to_plot 
+```
+
+```{r E_wvb_proportion_test}
+ggplot(to_plot, aes(x=condition, fill=clu.cond.time, y=prop))  +
+  geom_hline(yintercept = 0.5, linewidth=0.4, colour="grey55") + 
+  geom_bar(position="dodge", stat='identity', show.legend = F) + 
+  geom_errorbar( aes(ymin=conf.int.1, ymax=conf.int.2), 
+                 position=position_dodge(0.9), 
+                 width=0.4, linewidth=0.3, colour="black") +
+  facet_wrap(time~clu_pval_star,nrow=2, scales = "free_x")  +
+  scale_y_continuous(expand=c(0,0)) + scale_fill_manual(values=paired_clusters) +
+    labs(x=NULL, y="Proportion of cells") 
+```
+
+## F: Beige vs white Volcano plots 
+### per time
+### scRNAseq
+
+```{r}
+day1_test = read.delim(here(odir, "DE_day1_wvb.tsv"))
+day3_test = read.delim(here(odir, "DE_day3_wvb.tsv"))
+```
+
+```{r F_upper_day1_volcano}
+ggplot(day1_test, aes(x=avg_log2FC, y=-log10(p_val), colour=sig_cond)) + geom_point(size=0.5) + 
+  geom_text_repel(data = slice_min(day1_test, n=20, order_by = p_val), aes(label=gene_name)) + 
+  scale_colour_manual(values=c(pal[4],"black",pal[2]))+ guides(colour = guide_legend(override.aes = list(size = 2))) +
+  ggtitle("day1")+ coord_cartesian(x=c(-1,1))
+
+ggplot(day1_test, aes(x=avg_log2FC, y=-log10(p_val), colour=sig_cond)) + geom_point(size=0.5) + 
+  geom_text_repel(data = slice_min(day1_test, n=70, order_by = p_val), aes(label=gene_name)) + 
+  scale_colour_manual(values=c(pal[4],"black",pal[2])) + guides(colour = guide_legend(override.aes = list(size = 2))) +
+  ggtitle("day1 zoom") + coord_cartesian(x=c(-1,1), y=c(0, 100))
+```
+
+
+```{r F_lower_day3_volcano}
+ggplot(day3_test, aes(x=avg_log2FC, y=-log10(p_val), colour=sig_cond)) + geom_point(size=0.5) + 
+  geom_text_repel(data = slice_min(day3_test, n=20, order_by = p_val), aes(label=gene_name), show.legend = F) + 
+  scale_colour_manual(values=c(pal[5],"black",pal[1])) + guides(colour = guide_legend(override.aes = list(size = 2)))  +
+  ggtitle("day3") + coord_cartesian(x=c(-1,1))
+
+ggplot(day3_test, aes(x=avg_log2FC, y=-log10(p_val), colour=sig_cond)) + geom_point(size=0.5) + 
+  geom_text_repel(data = slice_min(day3_test, n=70, order_by = p_val), aes(label=gene_name)) + 
+  scale_colour_manual(values=c(pal[5],"black",pal[1])) + guides(colour = guide_legend(override.aes = list(size = 2))) +
+  ggtitle("day3 zoom") + coord_cartesian(x=c(-1,1), y=c(0, 100)) 
+```
+
+## G: Bulk RNAseq volcano plots
+
+## H table of DE genes per cluster
+

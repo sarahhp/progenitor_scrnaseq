@@ -1,0 +1,246 @@
+---
+title: "supp_figS2_integration_trial"
+author: "Sarah Hazell Pickering"
+date: "2026-01-19"
+output: html_document
+---
+
+## Setup
+```{r libs, message=FALSE, warning=FALSE}
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+library(ggsci)
+library(cowplot)
+library(ggpubr)
+library(here)
+```
+
+```{r params}
+module = "progenitors"
+load_data = T #Loading initial seurat analysis
+subset_data = T
+
+rmd_filename = "supp_figS2_progenitor_integration_trial"
+i_am(file.path("figures", paste0(rmd_filename,".Rmd")))
+
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 10) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#0A7EA8","#EF5780","#0A8550","#1C31D3","#EE9614","#670F39")
+clusters = ggsci::pal_simpsons()(12)[c(1:7,9:15)]
+prog_cols = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00","#AC8AD0")
+```
+
+## RPCA, Harmony,  and FASTMNN
+```{r}
+dataname = "integration_trial"
+odir = here("output", module, dataname)
+```
+
+```{r}
+if (subset_data){
+  tri = readRDS(here(odir, "10%_complete_analysis.rds"))
+} else {
+  tri = readRDS(here(odir, "complete_analysis.rds"))
+  DefaultAssay(tri) = "RNA"
+}
+tri
+```
+
+
+## RPCA
+```{r}
+method_name="rpca"
+red_name = method_name
+umap_name = paste("umap", sep=".", method_name)
+clu_name = paste( method_name, sep="_", "clusters")
+```
+
+```{r rpcaA_init}
+rpcaA = DimPlot(tri, reduction = umap_name,  group.by = "initial_clusters", cols=clusters, shuffle = T,
+               label=T, label.box=T, label.color="white") + theme_hp +
+    labs(title=NULL, color="Initial clusters", y="UMAP 2") + 
+    scale_colour_manual(values=clusters, labels=function(x) paste0("u",x)) + 
+    theme(legend.position = "bottom", legend.title.position = "top")
+rpcaA
+```
+
+```{r rpcaB_subject}
+rpcaB = DimPlot(tri, reduction = umap_name,  group.by = "subject", cols=pal, 
+               label=T, label.box=T, label.color="white",shuffle = T) +
+    theme_hp + labs(title=NULL, colour="Subject")+ 
+        theme(legend.position = "bottom", legend.title.position = "top")
+rpcaB
+```
+
+
+```{r rpcaC_new}
+rpcaC = DimPlot(tri, reduction = umap_name,  group.by = clu_name, shuffle = T,
+               label=T, label.box=T, label.color="white", cols=prog_cols) + 
+    theme_hp +labs(title=NULL, colour="Progenitor clusters (RPCA)") + 
+    scale_colour_manual(values=prog_cols, labels=function(x) paste0("p",x)) +
+        theme(legend.position = "bottom", legend.title.position = "top")
+rpcaC
+```
+
+## Harmony
+```{r}
+method_name="harmony"
+red_name = method_name
+umap_name = paste("umap", sep=".", method_name)
+clu_name = paste( method_name, sep="_", "clusters")
+```
+
+```{r harmonyA_init}
+harmonyA = DimPlot(tri, reduction = umap_name,  group.by = "initial_clusters", cols=clusters, shuffle = T,
+               label=T, label.box=T, label.color="white") +
+    theme_hp +labs(title=NULL, y="UMAP 2") + 
+    scale_colour_manual(values=clusters, labels=function(x) paste0("u",x))
+harmonyA
+```
+
+```{r harmonyB_subject}
+harmonyB = DimPlot(tri, reduction = umap_name,  group.by = "subject", cols=pal, 
+               label=T, label.box=T, label.color="white",shuffle = T) +
+    theme_hp +labs(title=NULL, y="UMAP 2")
+harmonyB
+```
+
+
+```{r harmonyC_new}
+harmonyC = DimPlot(tri, reduction = umap_name,  group.by = clu_name, shuffle = T,
+               label=T, label.box=T,) + 
+    theme_hp + labs(title=NULL, y="UMAP 2") 
+harmonyC
+```
+## FastMNN 
+
+```{r}
+method_name="fastmnn"
+red_name = method_name
+umap_name = paste("umap", sep=".", method_name)
+clu_name = paste( method_name, sep="_", "clusters")
+```
+
+```{r fastmnnA_init}
+fastmnnA = DimPlot(tri, reduction = umap_name,  group.by = "initial_clusters", cols=clusters, shuffle = T,
+               label=T, label.box=T, label.color="white") +
+    theme_hp + labs(title=NULL, y="UMAP 2") + scale_colour_manual(values=clusters, labels=function(x) paste0("u",x))
+fastmnnA
+```
+
+```{r fastmnnB_subject}
+fastmnnB = DimPlot(tri, reduction = umap_name,  group.by = "subject", cols=pal, 
+               label=T, label.box=T, label.color="white",shuffle = T) +
+    theme_hp + labs(title=NULL, y="UMAP 2")
+fastmnnB
+```
+
+
+```{r fastmnnC_new}
+fastmnnC = DimPlot(tri, reduction = umap_name,  group.by = clu_name, shuffle = T,
+               label=T, label.box=T) + 
+    theme_hp + labs(title=NULL, y="UMAP 2") 
+fastmnnC
+```
+
+## SCVI Integration
+```{r}
+dataname = "scvi_integration"
+odir = here("output", module, dataname)
+
+method_name="scVI"
+red_name = method_name
+umap_name = paste("umap", sep=".", method_name)
+clu_name = paste( method_name, sep="_", "clusters")
+```
+
+```{r}
+if (subset_data){
+  sbs = readRDS(here(odir, "10%_complete_analysis.rds"))
+} else {
+  sbs = readRDS(here(odir, "complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+Idents(sbs) = clu_name
+table(Idents(sbs))
+```
+
+```{r scvA_init}
+scvA = DimPlot(sbs, reduction = umap_name,  group.by = "initial_clusters", cols=clusters, shuffle = T,
+               label=T, label.box=T, label.color="white") + theme_hp + labs(title=NULL, x="UMAP 1", y="UMAP 2") +
+    scale_colour_manual(values=clusters, label=function(x) paste0("u",x))
+scvA
+```
+
+
+```{r scvB_subject}
+scvB = DimPlot(sbs, reduction = umap_name,  group.by = "subject", cols=pal, 
+               label=T, label.box=T, label.color="white",shuffle = T) +
+    theme_hp + labs(title=NULL, x="UMAP 1")
+scvB
+```
+
+
+```{r scvC_new}
+scvC = DimPlot(sbs, reduction = umap_name,  group.by = clu_name, shuffle = T,
+               label=T, label.box=T) +theme_hp + labs(title=NULL, x="UMAP 1")
+scvC
+```
+
+
+### get legends
+```{r}
+initial_clu = get_legend(rpcaA)
+subject = get_legend(rpcaB)
+prog_clu = get_legend(rpcaC)
+```
+
+
+## Combined plot
+
+
+```{r}
+umaps = plot_grid(rpcaA +labs(x=NULL) +theme(legend.position = "none"),
+          rpcaB +labs(y=NULL,x=NULL) +theme(legend.position = "none"),
+          rpcaC+labs(y=NULL,x=NULL)+theme(legend.position = "none"),
+          harmonyA +labs(x=NULL)+theme(legend.position = "none"),
+          harmonyB +labs(x=NULL, y=NULL)+theme(legend.position = "none"),
+          harmonyC +labs(y=NULL,x=NULL) +theme(legend.position = "none"),
+          fastmnnA +labs(x=NULL) +theme(legend.position = "none"),
+          fastmnnB +labs(y=NULL,x=NULL) +theme(legend.position = "none"),
+          fastmnnC +labs(y=NULL,x=NULL) +theme(legend.position = "none"),
+          scvA  +theme(legend.position = "none"), 
+          scvB +labs(y=NULL) +theme(legend.position = "none"), 
+          scvC +labs(y=NULL) +theme(legend.position = "none"), 
+          ncol = 3)
+umaps
+```
+
+
+```{r all_plots}
+plot_grid(umaps, plot_grid(initial_clu, subject, prog_clu, nrow=1, rel_widths = c(1,0.6,0.8)), 
+          rel_heights = c(1,0.15), ncol=1)  
+ggsave(here(fig_dir, "progenitor_integration_trial.png"), width = 18, height= 26, units="cm", dpi = 320)
+```
+
+
+![full path](/projects/imb-pkbphil/sp/sc_rnaseq/progenitor_scrnaseq/figures/supp_figS2_progenitor_integration_trial/progenitor_integration_trial.png)
+
+

@@ -16,3 +16,4 @@ output/*.rds
 logs
 screenlog*
 analysis/*/figures/*/*.pdf
+*model.pt
