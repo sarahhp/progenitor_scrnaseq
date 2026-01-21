@@ -4,7 +4,7 @@ output: html_document
 ---
 
 
-Integrate time points using RPCA, FastMNN and Harmony.  Key is not to integrate out differences between white and beige cells.  
+Integrate time points using RPCA, FastMNN and Harmony.  We're not integrating out differences between white and beige cells.  We're trying to bring the day0 cells close enough to the day1 and day3 cells (in UMAP or TSNE space reduced dimensionality space) that we can estimate cellular differentiation trajectories.  
 
 
 ```{r libs, message=FALSE, warning=FALSE}

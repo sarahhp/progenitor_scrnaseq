@@ -156,7 +156,15 @@ rule progenitors_scvi:
         
 rule supp_figS2_integration_trial:
     input:
-        rdata = SCVI_DIR + "/complete_analysis.rds",
+        tri_integr = ODIR + "/complete_analysis.rds",
+        scvi = SCVI_DIR + "/complete_analysis.rds",
+        rmd = ADIR + "supp_figS2_progenitor_integration_trial.Rmd"
+    output:
+        report = ADIR + "supp_figS2_progenitor_integration_trial.html"
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"
     
        
 #Trial clustering at different resolutions
@@ -520,8 +528,21 @@ rule tss_integration_trial:
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
-        "{params.cmd}"  
-    
+        "{params.cmd}"
+        
+        
+rule supp_figS10:
+    '''tss_integration_trial'''
+    input:
+        rdata = ODIR + "/complete_analysis.rds",
+        rmd = ADIR + "/supp_figS10_tss_integration_trial.Rmd"
+    output:
+        report = ADIR + "/supp_figS10_tss_integration_trial.html"
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"
+        
         
 ODIR = "output/beige_vs_white/tss_fastmnn"
         

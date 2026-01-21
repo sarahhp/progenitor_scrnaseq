@@ -1,0 +1,232 @@
+---
+title: "supp_figS10_integration_trial"
+author: "Sarah Hazell Pickering"
+date: "2026-01-19"
+output: html_document
+---
+
+## Setup
+```{r libs, message=FALSE, warning=FALSE}
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+library(ggsci)
+library(cowplot)
+library(ggpubr)
+library(here)
+```
+
+```{r params}
+module = "beige_vs_white"
+load_data = T #Loading initial seurat analysis
+subset_data = F
+
+rmd_filename = "supp_figS10_tss_integration_trial"
+i_am(file.path("figures", paste0(rmd_filename,".Rmd")))
+
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 10) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486","#E31A1C")
+clusters = tvthemes::gravityFalls_pal()(13)
+```
+
+## RPCA, Harmony,  and FASTMNN
+```{r}
+dataname = "tss_integration_trial"
+odir = here("output", module, dataname)
+```
+
+```{r}
+if (subset_data){
+  tri = readRDS(here(odir, "10%_complete_analysis.rds"))
+} else {
+  tri = readRDS(here(odir, "complete_analysis.rds"))
+  DefaultAssay(tri) = "RNA"
+}
+tri
+tri$cond.time = factor(tri$cond.time, c("white.day3","white.day1","asc.day0","beige.day1","beige.day3"))
+tri$all = "1"
+table(tri$cond.time)
+```
+
+
+## RPCA
+```{r}
+method_name="rpca"
+red_name = method_name
+umap_name = paste("umap", sep=".", method_name)
+clu_name = paste( method_name, sep="_", "clusters")
+```
+
+```{r rpcaA_init}
+rpcaA = DimPlot(tri, reduction = umap_name,  group.by = "initial_clusters", cols=clusters, shuffle = T,
+               label=T, label.box=T, label.color="white", shape.by = "all") + theme_hp +
+    labs(title=NULL, color="TSS clusters", y="UMAP 2") + 
+    scale_colour_manual(values=clusters, labels=function(x) paste0("t",x)) +
+    scale_shape_manual(values = 1, guide="none")
+rpcaA
+
+rpcaA + scale_shape_manual(values=NA, guide="none")
+```
+
+```{r rpcaB_cond.time}
+rpcaB = DimPlot(tri, reduction = umap_name,  group.by = "cond.time", cols=pal, 
+               shuffle = T, shape.by = "all") + theme_hp +
+    labs(title=NULL, color="Sample", y="UMAP 2") + 
+    scale_colour_manual(values=pal) +
+    scale_shape_manual(values = 1, guide="none")
+rpcaB
+
+rpcaB + scale_shape_manual(values=NA, guide="none")
+```
+
+
+```{r rpcaC_new}
+rpcaC = DimPlot(tri, reduction = umap_name,  group.by = clu_name, shuffle = T,
+               label=T, label.box=T, label.color="white", shape.by = "all") + theme_hp +
+    labs(title=NULL, y="UMAP 2", colour=clu_name) + 
+    scale_shape_manual(values = 1, guide="none")
+rpcaC
+
+rpcaC + scale_shape_manual(values=NA, guide="none") 
+
+```
+
+## Harmony
+```{r}
+method_name="harmony"
+red_name = method_name
+umap_name = paste("umap", sep=".", method_name)
+clu_name = paste( method_name, sep="_", "clusters")
+```
+
+```{r harmonyA_init}
+harmonyA = DimPlot(tri, reduction = umap_name,  group.by = "initial_clusters", cols=clusters, shuffle = T,
+               label=T, label.box=T, label.color="white", shape.by = "all") + theme_hp +
+    labs(title=NULL, color="TSS clusters", y="UMAP 2") + 
+    scale_colour_manual(values=clusters, labels=function(x) paste0("t",x)) +
+    scale_shape_manual(values = 1, guide="none")
+harmonyA
+
+harmonyA + scale_shape_manual(values=NA, guide="none")
+```
+
+```{r harmonyB_cond.time}
+harmonyB = DimPlot(tri, reduction = umap_name,  group.by = "cond.time", cols=pal, 
+               shuffle = T, shape.by = "all") + theme_hp +
+    labs(title=NULL, color="Sample", y="UMAP 2") + 
+    scale_colour_manual(values=pal) +
+    scale_shape_manual(values = 1, guide="none")
+harmonyB
+
+harmonyB + scale_shape_manual(values=NA, guide="none")
+```
+
+
+```{r harmonyC_new}
+harmonyC = DimPlot(tri, reduction = umap_name,  group.by = clu_name, shuffle = T,
+               label=T, label.box=T, label.color="white", shape.by = "all") + theme_hp +
+    labs(title=NULL, y="UMAP 2", colour=clu_name) + 
+    scale_shape_manual(values = 1, guide="none")
+harmonyC
+
+harmonyC + scale_shape_manual(values=NA, guide="none") 
+```
+## FastMNN 
+
+```{r}
+method_name="fastmnn"
+red_name = method_name
+umap_name = paste("umap", sep=".", method_name)
+clu_name = paste( method_name, sep="_", "clusters")
+```
+
+```{r fastmnnA_init}
+fastmnnA = DimPlot(tri, reduction = umap_name,  group.by = "initial_clusters", cols=clusters, shuffle = T,
+               label=T, label.box=T, label.color="white", shape.by = "all") + theme_hp +
+    labs(title=NULL, color="TSS clusters", y="UMAP 2",x= "UMAP 1") + 
+    scale_colour_manual(values=clusters, labels=function(x) paste0("t",x)) +
+    scale_shape_manual(values = 1, guide="none")
+fastmnnA
+
+fastmnnA + scale_shape_manual(values=NA, guide="none")
+```
+
+```{r fastmnnB_cond.time}
+fastmnnB = DimPlot(tri, reduction = umap_name,  group.by = "cond.time", cols=pal, 
+               shuffle = T, shape.by = "all") + theme_hp +
+    labs(title=NULL, color="Sample", y="UMAP 2", "UMAP 1") + 
+    scale_colour_manual(values=pal) +
+    scale_shape_manual(values = 1, guide="none")
+fastmnnB
+
+fastmnnB + scale_shape_manual(values=NA, guide="none")
+```
+
+
+```{r fastmnnC_new}
+fastmnnC = DimPlot(tri, reduction = umap_name,  group.by = clu_name, shuffle = T,
+               label=T, label.box=T, shape.by = "all") + theme_hp +
+     labs(title=NULL, y="UMAP 2", x="UMAP 1")  + 
+    scale_shape_manual(values = 1, guide="none")
+fastmnnC
+
+fastmnnC + scale_shape_manual(values=NA, guide="none") 
+```
+
+### get legends
+```{r legends_only}
+initial_clu = get_legend(rpcaA + 
+    theme(legend.position = "bottom", legend.title.position = "top"))
+cond.time = get_legend(rpcaB + guides(colour = guide_legend(nrow=2, byrow=T,
+                                                            override.aes = list(size = 3)) ) +
+    theme(legend.position = "bottom", legend.title.position = "top"))
+
+legend_plot = plot_grid(initial_clu, cond.time, nrow=1)
+legend_plot
+```
+
+
+## Combined plot
+
+
+```{r}
+umaps = plot_grid(rpcaA +labs(x=NULL) +theme(legend.position = "none"),
+          rpcaB +labs(y=NULL,x=NULL) +theme(legend.position = "none"),
+          rpcaC+labs(y=NULL,x=NULL)+theme(legend.position = "none"),
+          harmonyA +labs(x=NULL)+theme(legend.position = "none"),
+          harmonyB +labs(x=NULL, y=NULL)+theme(legend.position = "none"),
+          harmonyC +labs(y=NULL,x=NULL) +theme(legend.position = "none"),
+          fastmnnA +labs() +theme(legend.position = "none"),
+          fastmnnB +labs(y=NULL) +theme(legend.position = "none"),
+          fastmnnC +labs(y=NULL) +theme(legend.position = "none"),
+          ncol = 3)
+```
+
+
+```{r all_plots}
+plot_grid(umaps, legend_plot, 
+          rel_heights = c(1,0.15), ncol=1)  
+ggsave(here(fig_dir, "tss_integration_trial.png"), width = 18, height= 18, units="cm", dpi = 600)
+```
+
+
+![Combined Plot](/projects/imb-pkbphil/sp/sc_rnaseq/progenitor_scrnaseq/figures/supp_figS10_tss_integration_trial/tss_integration_trial.png)
+
+
