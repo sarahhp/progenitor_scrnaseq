@@ -1,0 +1,160 @@
+---
+title: "tss_fastmnn_monocle_tsne"
+author: "Sarah Hazell Pickering"
+date: "2024-09-19"
+output: html_document
+---
+## setup
+
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+library(here)
+library(monocle3)
+library(viridis)
+```
+
+```{r params}
+module = "beige_vs_white"
+method = "fastmnn"
+dataname = paste0("tss_", method)
+load_data = T #loading data
+subset_data = F
+
+rmd_filename = "tss_fastmnn_monocle_tsne"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486","#E31A1C")
+clusters = tvthemes::gravityFalls_pal()(13)
+```
+
+
+## Load Seurat object
+```{r load_seurat}
+if (subset_data){
+  sbs = readRDS(here(odir, "10%_complete_analysis.rds"))
+} else {
+  sbs = readRDS(here(odir,"complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+sbs
+Idents(sbs) = "initial_clusters"
+table(Idents(sbs))
+```
+
+
+```{r}
+DimPlot(sbs, reduction="tsne") + scale_colour_manual(values=clusters) + theme_hp
+```
+
+## Convert to monocle object
+```{r}
+cds = SeuratWrappers::as.cell_data_set(sbs)
+cds
+reducedDims(cds)[["tSNE"]] = reducedDims(cds)[["TSNE"]]
+```
+
+```{r}
+p = plot_cells(cds, show_trajectory_graph = F, cell_stroke=0.35, reduction_method = "tSNE", color_cells_by="initial_clusters", label_cell_groups = F) + 
+  scale_colour_manual(values=clusters) + theme_hp 
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+Monocle runs on UMAP slot; to run with TSNE we have to overwrite the UMAP slot.  
+```{r}
+reducedDims(cds)[["UMAP"]] = reducedDims(cds)[["tSNE"]]
+cds = cluster_cells(cds)
+p = plot_cells(cds, show_trajectory_graph = F, color_cells_by = "partition", label_groups_by_cluster = F, group_label_size = 5)
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+```{r}
+cds = learn_graph(cds, close_loop = T)
+p = plot_cells(cds, color_cells_by = "initial_clusters",
+           label_leaves=FALSE,
+           label_branch_points=FALSE, cell_stroke=0.35, label_cell_groups = F)+ 
+  scale_colour_manual(values=clusters)
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+
+## Order cells
+
+```{r}
+pick_root_node = function(cds,factor_name, start_bin){
+  cell_ids = which(colData(cds)[,factor_name]==start_bin)
+  closest_vertex <-  cds@principal_graph_aux[["UMAP"]]$pr_graph_cell_proj_closest_vertex
+  summary(closest_vertex)
+  closest_vertex <- as.matrix(closest_vertex[colnames(cds), ])
+  root_pr_nodes <- igraph::V(principal_graph(cds)[["UMAP"]])$name[as.numeric(names
+    (which.max(table(closest_vertex[cell_ids,]))))]
+return(root_pr_nodes)
+}
+pick_root_node(cds, "time","day0")
+pick_root_node(cds, "time","day1")
+pick_root_node(cds, "time","day3")
+```
+
+
+```{r day0_root}
+cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "time", "day0"))
+p = plot_cells(cds, color_cells_by = "pseudotime", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="red") + scale_colour_viridis()
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+
+```{r adipogenesis_cluster5_root}
+cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "initial_clusters", "5"))
+p = plot_cells(cds, color_cells_by = "pseudotime", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="red") + scale_colour_viridis()
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+```{r prolif_root}
+cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "initial_clusters", "8"))
+p = plot_cells(cds, color_cells_by = "pseudotime", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="red") + scale_colour_viridis()
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+## Save
+
+```{r}
+if (subset_data == FALSE){
+  saveRDS(cds, here(odir,"monocle_complete_analysis_tsne.rds"))
+  sub = subset(cds, downsample=1000)
+  saveRDS(sub, here(odir ,"10%_monocle_analysis_tsne.rds"))
+} else if (subset_data){ #if subset, don't save complete analysis
+  saveRDS(cds, file =here(odir,"1%_monocle_subset_analysis_tsne.rds") )
+}
+```
+
