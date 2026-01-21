@@ -237,7 +237,7 @@ umaps
 ```{r all_plots}
 plot_grid(umaps, plot_grid(initial_clu, subject, prog_clu, nrow=1, rel_widths = c(1,0.6,0.8)), 
           rel_heights = c(1,0.15), ncol=1)  
-ggsave(here(fig_dir, "progenitor_integration_trial.png"), width = 18, height= 26, units="cm", dpi = 320)
+ggsave(here(fig_dir, "progenitor_integration_trial.png"), width = 18, height= 26, units="cm", dpi = 600)
 ```
 
 
