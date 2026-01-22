@@ -1,0 +1,149 @@
+---
+title: "figure4_adipogenesis"
+author: "Sarah Hazell Pickering"
+date: "2026-01-21"
+output: html_document
+---
+
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(ComplexHeatmap)
+library(Seurat)
+library(clusterProfiler)
+library(dplyr)
+library(enrichplot)
+library(ggplot2)
+library(ggsci)
+library(here)
+library(patchwork)
+```
+
+## setup
+```{r params}
+module = "adipogenesis"
+dataname = "white_only_downsample"
+load_data = T #loading data
+subset_data = F
+
+rmd_filename = "white_only_downsample_markers"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#B3B3B3","#85C2EA","#1F78B4")
+clusters = ggsci::pal_simpsons()(13)[c(1:7,9:13)]
+names(clusters) = 0:11
+figure_order = as.character(c(8,3,1,11,7,0,9,10,6,4,2,5))
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+## Load seurat obj
+```{r}
+if (subset_data){
+  sbs = readRDS(here(odir, "10%_subset_analysis.rds"))
+} else {
+  sbs = readRDS(here(odir, "complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+sbs
+#format clusters
+sbs$fclusters = factor(sbs$seurat_clusters, levels=figure_order)
+```
+
+## B & D:UMAPs
+```{r umap}
+DimPlot(sbs, reduction="umap", group.by="time", cols=pal[c(1,2,4)]) + theme_hp + 
+  theme(plot.title=element_blank())
+DimPlot(sbs, reduction="umap", cols=clusters, pt.size = 0.4) + theme_hp +
+  scale_colour_manual(labels=function (x){gsub("^","a",x)}, name="Adipogenesis\nclusters",
+                        values = clusters)
+```
+## C: Cluster composition
+
+```{r}
+composition = read.delim(here(odir,"cluster_composition.txt"))
+composition$seurat_clusters = factor(composition$seurat_clusters, levels=names(clusters))
+head(composition)
+```
+
+
+```{r}
+ggplot(composition) + geom_bar(stat="identity",aes(y=time, x=n_cells, fill=seurat_clusters), position = "fill") +
+  scale_y_discrete(limits=rev)+ 
+  scale_fill_manual(values=clusters, labels= function (x){gsub("^","a",x)}, name="Adipogenesis\nclusters") +
+  coord_cartesian(expand = F) +
+    labs(y= "Time", x="Proportion of cells")
+```
+
+## E: GO Heatmap
+
+```{r}
+go_matrix = read.delim(here(odir, "ORA_marker_genes_expression_matrix.tsv"), )
+go_matrix = data.matrix(go_matrix)
+go_matrix[1:4,1:4]
+
+cell_ids = sbs@meta.data[gsub("\\.1$","-1",colnames(go_matrix)), c("time","fclusters")]
+```
+
+```{r go_replace}
+phrases= read.delim(here("data/gene_sets/abbreviations.txt"))
+recap= read.delim(here("data/gene_sets/capitalisations.txt"))
+```
+
+```{r abrev_go}
+drama_shorten = function(ont) {
+  for (x in 1:nrow(phrases)){
+    ont = gsub( phrases$phrase[x],phrases$abbreviation[x], ont, ignore.case = T)
+  }
+  a = abbreviate(gsub("_"," ", gsub("^[[:alpha:]]*_","",tolower(ont))),minlength=41, dot=T, named = F)
+  a = stringr::str_to_sentence(a)
+  for (i in 1:nrow(recap))
+    a = gsub(sprintf("\\b%s\\b", recap$lowercase[i]),recap$capital[i],a, ignore.case = T)
+  return(a)
+}
+```
+
+```{r go_heatmap}
+rownames(go_matrix) = drama_shorten(rownames(go_matrix))
+ha = HeatmapAnnotation(cluster = cell_ids$fclusters, col = list(cluster=clusters), show_legend = F,
+                       show_annotation_name = F)
+h =Heatmap(go_matrix, show_column_names = F, column_split = cell_ids$fclusters, 
+        cluster_columns = F, show_heatmap_legend = F, top_annotation = ha, row_names_max_width = unit(9,"cm"))
+h
+
+```
+
+
+```{r heatmap_legend}
+h =Heatmap(go_matrix, show_column_names = F, column_split = cell_ids$fclusters, 
+        cluster_columns = F, top_annotation = ha, row_names_max_width = unit(9,"cm"), name="scaled expression")
+h
+
+```
+
+
+
+
+
+
+
+
+

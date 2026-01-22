@@ -6,11 +6,7 @@ output: html_document
 ---
 
 # Figure 6
-
-
-
 ## Setup
-
 
 ```{r libs, message=FALSE, warning=FALSE}
 library(BPCells)
@@ -45,16 +41,12 @@ knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
 theme_hp = theme_classic(base_size = 15) +
   theme(axis.line = element_line(linewidth = 0.25),
         axis.ticks = element_line(linewidth = 0.25),
-        strip.background = element_blank(),
-        #Add facet boxes
-        panel.border=element_rect(colour="lightgrey", fill=NA),
-        #Add black border to colourbar legends
-        legend.ticks = element_line(colour="black", linewidth=0.25),
-        legend.frame = element_rect(colour="black", linewidth = 0.25),
-        legend.title = element_text(size=13,hjust=0.5))
+        strip.background = element_blank())
 theme_set(theme_hp)
 pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486", "#E31A1C")
-spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+prog_cols = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00")
+prog_levels = c("p5","p4","p6","p3","p0","p1","p2")
+names(prog_cols) = paste0("p", 0:(length(prog_levels)-1))
 ```
 
 ## TSS level trajectories
@@ -65,5 +57,74 @@ odir = here("output", module, dataname)
 clusters =   tvthemes::gravityFalls_pal()(13)
 ```
 
-## A UMAP with trajectory
+### read data
+```{r}
+beige = readRDS(here(odir,"beige_monocle_complete_analysis_umap.rds"))
+beige$progen_clusters = paste0("p", beige$progen_clusters)
+table(beige$progen_clusters)
+```
+
+
+## A: UMAP with trajectory
+
+```{r Alarge_umap}
+p=plot_cells(beige, color_cells_by = "initial_clusters", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.5,  alpha = 0.5,  graph_label_size = 5)+
+  scale_colour_manual(values=clusters) + theme_hp
+p$layers[[1]]$aes_params$colour = 'transparent' 
+p 
+
+for (d in c("png","pdf")){
+    ggsave(here(fig_dir,paste0("Aggsave_monocle_UMAP.",d)), height=7, width=10, units="cm", dpi=600)
+}
+```
+## B Progenitor trajectories
+```{r}
+beige_progen = beige[,subset(colData(beige), grepl("^p[0-7]",time.progen_clusters)) %>%row.names]
+w=plot_cells(beige_progen, color_cells_by = "progen_clusters", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="black", label_cell_groups = F, cell_size=0.2)
+w$layers[[1]]$aes_params$colour = 'transparent'
+w + facet_wrap(~ progen_clusters) +
+  scale_colour_manual(values=prog_cols,name = "cluster") +
+    theme_hp + coord_cartesian(x=c(-11,11), y=c(-6, 6))
+
+for (d in c("png","pdf")){
+    ggsave(here(fig_dir,paste0("Bggsave_MonocleUMAPs.",d)), height=7, width=10, units="cm", dpi=600)
+}
+```
+
+## C: Violins
+
+```{r}
+meta= read.delim(here(odir, "monocle_pseudotime.tsv"))
+meta$time.progen_clusters = factor(meta$time.progen_clusters )
+```
+
+
+```{r Cmonocleviolin_stacked}
+ps_cols = c(prog_cols, pal[2:1])
+names(ps_cols) = c(names(prog_cols), "day1","day3")
+ggplot(filter(meta, sample_or_progen_cluster != "day0"), 
+       aes(x=monocle_pseudotime, y=time.progen_clusters, fill=time.progen_clusters)) + 
+    geom_violin(scale="width", show.legend = F)+
+    coord_cartesian(expand=F) +
+  facet_grid(pscondition~.) + scale_fill_manual(values=ps_cols, name="identity") + 
+  scale_y_discrete(limits=c(paste0("day",c(3,1)), rev(prog_levels))) +
+    labs(y="Progenitor cluster or time") +theme_hp
+```
+
+```{r Cmonocleviolin_side_by_side}
+
+ggplot(filter(meta, sample_or_progen_cluster != "day0"), 
+       aes(x=monocle_pseudotime, y=time.progen_clusters, fill=time.progen_clusters)) + 
+    geom_violin(scale="width", show.legend = F)+
+    coord_cartesian(expand=F) +
+  facet_grid(.~pscondition) + scale_fill_manual(values=ps_cols, name="identity") + 
+  scale_y_discrete(limits=c(paste0("day",c(3,1)), rev(prog_levels))) +
+    labs(y="Progenitor cluster or time") +theme_hp
+```
+
+# Adipogenesis
+## D: UMAPs
+
 

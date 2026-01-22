@@ -1,0 +1,321 @@
+---
+title: "markers_and_go"
+author: "Sarah Hazell Pickering"
+date: "2024-08-29"
+output: html_document
+---
+
+# Markers
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(ComplexHeatmap)
+library(Seurat)
+library(clusterProfiler)
+library(dplyr)
+library(enrichplot)
+library(ggplot2)
+library(ggsci)
+library(here)
+library(patchwork)
+```
+
+## setup
+```{r params}
+module = "adipogenesis"
+dataname = "white_only_downsample"
+load_data = T #loading data
+subset_data = F
+
+rmd_filename = "white_only_downsample_markers"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#B3B3B3","#85C2EA","#1F78B4")
+clusters = ggsci::pal_simpsons()(13)[c(1:7,9:13)]
+names(clusters) = 0:11
+figure_order = as.character(c(8,3,1,11,7,0,9,10,6,4,2,5))
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+
+## Load seurat obj
+```{r}
+if (subset_data){
+  sbs = readRDS(here(odir, "10%_subset_analysis.rds"))
+} else {
+  sbs = readRDS(here(odir, "complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+sbs
+#format clusters
+sbs$fclusters = factor(sbs$seurat_clusters, levels=figure_order)
+```
+### UMAP
+```{r umap}
+DimPlot(sbs, reduction="umap", group.by="time", cols=pal) + theme_hp + 
+  theme(plot.title=element_blank())
+DimPlot(sbs, reduction="umap", cols=clusters, pt.size = 0.4) + theme_hp +
+  scale_colour_manual(labels=function (x){gsub("^","a",x)}, name="Adipogenesis\nclusters",
+                        values = clusters)
+```
+
+
+```{r}
+clgo = read.delim(here(odir, "ORA_marker_genes.txt"))
+raw_go_terms = clgo %>% slice_min(n=2, order_by = p.adjust, by=cluster) %>% pull(ID)
+upr_go_terms = clgo %>%  filter(cluster %in% c(6,8)) %>% slice_min(n=2, order_by = p.adjust, by=cluster) %>% pull(ID)
+head(raw_go_terms)
+head(upr_go_terms)
+```
+
+## Marker genes
+
+```{r}
+all.genes = rownames(sbs)
+```
+
+```{r}
+norm.markers = read.delim(here(odir, "marker_genes.txt"))
+norm.markers = filter(norm.markers, p_val_adj < 0.01)
+table(norm.markers$cluster)
+norm.markers$cluster = factor(norm.markers$cluster, levels=0:11)
+uniq.norm.markers = norm.markers[!norm.markers$gene %in% names(which(table(norm.markers$gene) > 1)),]
+head(norm.markers)
+```
+
+### Genes sorted logFC * pct.1
+```{r}
+top.markers = as.data.frame(norm.markers %>%
+    group_by(cluster) %>% filter(pct.1 > 0.7) %>% #also adding a minimum filter to show CD36 instead of LINC01197 for cluster a11
+    slice_max(n = 2, order_by = avg_log2FC*pct.1))
+top.markers
+```
+ 
+```{r dotplot}
+DotPlot(sbs, features=rev(unique(top.markers$gene)), group.by = "seurat_clusters") & 
+  scale_colour_gradientn(colours = spectral) & coord_flip()
+```
+
+
+```{r top_markers_logfc_pct1}
+top.markers$gene = factor(top.markers$gene, levels=rev(unique(top.markers$gene)))
+markers.to.plot = filter(top.markers, gene %in% top.markers$gene)
+markers.to.plot$gene = factor(markers.to.plot$gene, levels=levels(top.markers$gene))
+
+ggplot(markers.to.plot, aes(y=gene, size=abs(avg_log2FC), color=cluster,
+                    x=cluster)) + 
+  geom_point()  +
+  scale_color_manual(values=clusters, guide="none") +
+  scale_x_discrete(labels=function (x){gsub("^","a",x)}, name="Adipogenesis clusters") +
+  ylab("") + scale_size_continuous(name="log2FC")
+
+markers.to.plot = mutate(markers.to.plot, cluster = factor(cluster, levels=figure_order)) %>%
+  arrange(cluster)
+markers.to.plot$gene = factor(markers.to.plot$gene, levels=unique(rev(markers.to.plot
+                                                                  $gene)))
+
+ggplot(markers.to.plot, aes(y=gene, size=abs(avg_log2FC), color=cluster,
+                    x=cluster)) + 
+  geom_point()  +
+  scale_color_manual(values=clusters, guide="none") +
+  scale_x_discrete(labels=function (x){gsub("^","a",x)}, name="Adipogenesis clusters") +
+  ylab("") + scale_size_continuous(name="log2FC")
+```
+
+### Gene Overlaps plots
+
+```{r top_markers_overlap}
+include_all_plot = filter(norm.markers, gene %in% markers.to.plot$gene & p_val_adj< 0.01)
+include_all_plot$gene = factor(include_all_plot$gene, levels=levels(top.markers$gene))
+
+a = ggplot(include_all_plot, aes(x=cluster, y=gene, colour=cluster, size=avg_log2FC)) + 
+  geom_point()+  
+    scale_color_manual(values=clusters, guide="none") +
+  scale_x_discrete(labels=function (x){gsub("^","a",x)}, name="Adipogenesis clusters") +
+  ylab("") + scale_size_continuous(name="log2FC")
+a
+```
+
+
+```{r top_markers_overlap_time_order}
+include_all_plot = mutate(include_all_plot, cluster=factor(cluster, levels=figure_order)) %>% arrange()
+include_all_plot$gene = factor(include_all_plot$gene, levels=levels(markers.to.plot$gene))
+a = ggplot(include_all_plot, aes(x=cluster, y=gene, colour=cluster, size=avg_log2FC)) + 
+  geom_point()+  
+    scale_color_manual(values=clusters, guide="none") +
+  scale_x_discrete(labels=function (x){gsub("^","a",x)}, name="Adipogenesis clusters") +
+  ylab("") + scale_size_continuous(name="log2FC")
+a
+```
+
+
+## GO setup
+
+```{r}
+dfgo = read.delim(here(odir,"ORA_marker_genes.txt"))
+```
+
+
+```{r go_replace}
+phrases= read.delim(here("data/gene_sets/abbreviations.txt"))
+recap= read.delim(here("data/gene_sets/capitalisations.txt"))
+```
+
+```{r abrev_go}
+drama_shorten = function(ont) {
+  for (x in 1:nrow(phrases)){
+    ont = gsub( phrases$phrase[x],phrases$abbreviation[x], ont, ignore.case = T)
+  }
+  a = abbreviate(gsub("_"," ", gsub("^[[:alpha:]]*_","",tolower(ont))),minlength=41, dot=T, named = F)
+  a = stringr::str_to_sentence(a)
+  for (i in 1:nrow(recap))
+    a = gsub(sprintf("\\b%s\\b", recap$lowercase[i]),recap$capital[i],a, ignore.case = T)
+  return(a)
+}
+```
+
+```{r load_gene_sets}
+molsig <- clusterProfiler::read.gmt(here("data/gene_sets/msigdb.v2024.1.Hs.symbols.gmt"))
+head(molsig); nrow(molsig)
+
+prefixes = c("HALLMARK", "KEGG","REACTOME", "WP", "GOBP", "GOCC","GOMF")
+colnames(molsig) = c("term","gene")
+some.molsig = molsig[gsub("_.*","", molsig$term) %in% prefixes,]
+some.molsig$term = factor(some.molsig$term)
+table(gsub("_.*","", some.molsig$term))
+rm(molsig)
+```
+
+### coloured plot
+
+```{r go_all}
+dfgo$cluster = factor(dfgo$cluster, levels=0:max(as.integer(dfgo$cluster)))
+dfgo$short_desc =drama_shorten(dfgo$Description)
+go_to_plot = filter(dfgo, p.adjust < 0.01) %>% group_by(cluster) %>%
+              slice_min(n = 2, order_by = data.frame(p.adjust, pvalue))
+go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
+
+p = ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point()+   
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +scale_color_manual(values=clusters)
+p
+```
+
+```{r go_wo_wp}
+go_to_plot = filter(dfgo, p.adjust < 0.01 & !grepl("^wp", short_desc)) %>% group_by(cluster) %>%
+              slice_min(n = 3, order_by = data.frame(p.adjust,pvalue))
+go_to_plot$short_desc = factor(go_to_plot$short_desc, levels=rev(unique(go_to_plot$short_desc)))
+
+p = ggplot(go_to_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point()+
+  theme(axis.text.x=element_text(angle=45, hjust=1)) +
+  scale_color_manual(values=clusters, guide="none") +
+  scale_x_discrete(labels=function (x){gsub("^","a",x)}, name="Adipogenesis clusters") +
+  ylab("") + scale_size_continuous(name="Genes")
+p
+```
+
+
+```{r cluster_go_overlapping}
+include_all_plot = filter(dfgo, Description %in% go_to_plot$Description & p.adjust < 0.01)
+include_all_plot$short_desc = factor(include_all_plot$short_desc, levels=levels(go_to_plot$short_desc))
+a = ggplot(include_all_plot, aes(x=cluster, y=short_desc, colour=cluster, size=Count)) + 
+  geom_point()+
+  theme(axis.text.x=element_text(angle=30, hjust=1)) +scale_color_manual(values=clusters)
+a
+ggsave(here(odir, "cluster_go_overlapping.pdf"), height = 7, width=9)
+```
+
+
+## GO terms Heatmap
+
+### Setup
+step1: convert df of top 2 Go terms per cluster to a list of Go terms and genes
+```{r}
+top2_terms = go_to_plot[["ID"]]
+top2_genelist = list()
+for (n in unique(top2_terms)){
+  top2_genelist[[n]] = some.molsig$gene[some.molsig$term == n]
+}
+str(top2_genelist[1:6])
+```
+
+
+```{r}
+sbs = AddModuleScore(sbs, features = top2_genelist, name="top2GO")
+colnames(sbs@meta.data)[grep("top2GO",colnames(sbs@meta.data))] = names(top2_genelist)
+DotPlot(sbs, features=names(top2_genelist)) + coord_flip() + 
+  scale_colour_gradientn(colours=spectral) + 
+  scale_x_discrete(labels=drama_shorten(names(top2_genelist)))
+```
+^^ dots are not neccesarily helpful because they're mostly large.  
+
+### matrix formatting
+```{r}
+filt = subset(sbs, downsample=100)
+go_matrix= filt@meta.data[names(top2_genelist)]
+cell_ids = filt@meta.data[c("time","fclusters")]
+go_matrix = t(scale(data.matrix(go_matrix)))
+go_matrix[1:3,1:3]
+```
+
+```{r}
+write.table(go_matrix, here(odir, "ORA_marker_genes_expression_matrix.tsv"), sep="\t",quote=F)
+```
+
+This is much better than the dotplot :)  But it also really shows how inadequate the cluster and GO analysis is.  Which is maybe fundamental to discretising a dynamic process.   
+
+### Heatmap
+
+```{r go_heatmap}
+rownames(go_matrix) = drama_shorten(rownames(go_matrix))
+ha = HeatmapAnnotation(cluster = cell_ids$fclusters, col = list(cluster=clusters), show_legend = F,
+                       show_annotation_name = F)
+h =Heatmap(go_matrix, show_column_names = F, column_split = cell_ids$fclusters, 
+        cluster_columns = F, show_heatmap_legend = F, top_annotation = ha, row_names_max_width = unit(9,"cm"))
+h
+
+```
+
+
+```{r heatmap_legend}
+h =Heatmap(go_matrix, show_column_names = F, column_split = cell_ids$fclusters, 
+        cluster_columns = F, top_annotation = ha, row_names_max_width = unit(9,"cm"), name="scaled expression")
+h
+
+```
+
+
+## Adipogenesis markers
+
+```{r}
+FeaturePlot(sbs, reduction="tsne", features=c("ADIPOQ","LPL","PPARG","CEBPA"))
+```
+
+```{r}
+FeaturePlot(sbs, reduction="tsne", features=c("MGP","DCN","CEBPD","CEBPB"))
+```
+
+
+
+

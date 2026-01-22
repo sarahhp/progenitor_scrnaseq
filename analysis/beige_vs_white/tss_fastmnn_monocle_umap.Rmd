@@ -86,7 +86,7 @@ DimPlot(white, reduction="umap") + scale_colour_manual(values=clusters)
 ```
 
 ## Convert to monocle object
-```{r}
+```{r warning=FALSE}
 cds = SeuratWrappers::as.cell_data_set(white)
 cds
 ```
@@ -105,7 +105,6 @@ p= plot_cells(cds, show_trajectory_graph = F, color_cells_by = "partition", labe
 p$layers[[1]]$aes_params$colour = 'transparent'
 p
 ```
-Parition 2 is not even a separate cluster... Not sure what that is 
 
 ```{r}
 cds = learn_graph(cds, close_loop = F)
@@ -137,14 +136,26 @@ pick_root_node(cds, "time","day3")
 ```
 
 
-## Adipogenic end point
+## Starting from proliferating cells
+
 ```{r}
-cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "seurat_clusters", "5"))
+cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "seurat_clusters", "7"))
 p=plot_cells(cds, color_cells_by = "pseudotime", label_leaves = F, label_branch_points = F, 
                 trajectory_graph_color="red") + scale_colour_viridis()
 p$layers[[1]]$aes_params$colour = 'transparent'
 p
 ```
+
+
+## Adipogenic end point
+```{r}
+cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "seurat_clusters", "4"))
+p=plot_cells(cds, color_cells_by = "pseudotime", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="red") + scale_colour_viridis()
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
 
 ## Save
 
@@ -177,7 +188,7 @@ DimPlot(beige, reduction="umap") + scale_colour_manual(values=clusters)
 ```
 
 ## Convert to monocle object
-```{r}
+```{r warning=FALSE}
 cds = SeuratWrappers::as.cell_data_set(beige)
 cds
 ```
@@ -226,15 +237,25 @@ pick_root_node(cds, "time","day1")
 pick_root_node(cds, "time","day3")
 ```
 
+## Starting from proliferating cells
 
-## Adipogenic end point
 ```{r}
-cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "seurat_clusters", "5"))
+cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "seurat_clusters", "7"))
 p=plot_cells(cds, color_cells_by = "pseudotime", label_leaves = F, label_branch_points = F, 
                 trajectory_graph_color="red") + scale_colour_viridis()
 p$layers[[1]]$aes_params$colour = 'transparent'
 p
 ```
+
+## Adipogenic end point
+```{r}
+cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "seurat_clusters", "4"))
+p=plot_cells(cds, color_cells_by = "pseudotime", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="red") + scale_colour_viridis()
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
 
 ## Save
 

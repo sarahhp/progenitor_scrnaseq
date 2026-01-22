@@ -47,7 +47,10 @@ theme_hp = theme_classic(base_size = 15) +
 theme_set(theme_hp)
 pal_white = c("#B3B3B3","#85C2EA","#1F78B4")
 pal_beige = c("#B3B3B3", "#F18486","#E31A1C")
+pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486","#E31A1C")
 prog_cols = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00")
+prog_levels = c("p5","p4","p6","p3","p0","p1","p2")
+names(prog_cols) = paste0("p", 0:(length(prog_levels)-1))
 clusters = tvthemes::gravityFalls_pal()(13)
 names(clusters) = 0:11
 spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
@@ -112,17 +115,27 @@ w=plot_cells(white_progen, color_cells_by = "progen_clusters", label_leaves = F,
                 trajectory_graph_color="black", label_cell_groups = F, cell_size=0.2)
 w$layers[[1]]$aes_params$colour = 'transparent'
 w + facet_wrap(~ progen_clusters) +
-  scale_colour_manual(values=c(prog_cols, pal),name = "cluster")
+  scale_colour_manual(values=c(prog_cols, pal_white),name = "cluster")
 ```
-
+## Only trajectory plots
 ```{r only_graph_white}
 plot_cells(white, label_leaves = F, label_branch_points = F, 
-                trajectory_graph_color="black", label_cell_groups = F, cell_size=0)
+                trajectory_graph_color="black", label_cell_groups = F, cell_size=0,
+            graph_label_size = 5) 
+
+plot_cells(white, label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color=pal[1], label_cell_groups = F, cell_size=0,
+            graph_label_size = 5) 
 ```
 
 ```{r only_graph_beige}
 plot_cells(beige, label_leaves = F, label_branch_points = F, 
-                trajectory_graph_color="black", label_cell_groups = F, cell_size=0)
+                trajectory_graph_color="black", label_cell_groups = F, cell_size=0,
+            graph_label_size = 5)
+
+plot_cells(beige, label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color=pal[5], label_cell_groups = F, cell_size=0, 
+           graph_label_size = 5)
 ```
 
 ## Violin plot of pseudotime
@@ -157,36 +170,37 @@ sbs_beige$pscondition ="beige"
 merged_obj <- merge(x = sbs_white, y = sbs_beige, add.cell.ids = c("white","beige"), merge.dr = F)
 merged_obj
 merged_obj$progen_clusters = factor(merged_obj$progen_clusters, levels=c(paste0("p",0:7),paste0("day",c(0,1,3))))
+head(merged_obj@meta.data)
 ```
 
 ```{r paired_ridge_plot}
-VlnPlot(merged_obj, features = "monocle_pseudotime", group.by = "progen_clusters", split.by="pscondition",
+VlnPlot(merged_obj, features = "monocle_pseudotime", group.by = "time.progen_clusters", split.by="pscondition",
         cols= c( "#FF7F00","#1F78B4"), pt.size = 0, split.plot = T) +
   scale_x_discrete(limits = c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3)))) +
   ylab("Pseudotime")
 
 
-VlnPlot(merged_obj, features = "raw_pseudotime", group.by = "progen_clusters", split.by="pscondition",
+VlnPlot(merged_obj, features = "raw_pseudotime", group.by = "time.progen_clusters", split.by="pscondition",
         cols= c( "#FF7F00","#1F78B4"), pt.size = 0, split.plot = T) +
   scale_x_discrete(limits = c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3)))) +
   ylab("Pseudotime")
-VlnPlot(merged_obj, features = "monocle_pseudotime", group.by = "progen_clusters",split.by="pscondition",
+VlnPlot(merged_obj, features = "monocle_pseudotime", group.by = "time.progen_clusters",split.by="pscondition",
         cols= c( "#FF7F00","#1F78B4"), pt.size = 0) +
   scale_x_discrete(limits = c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3)))) +
   ylab("Pseudotime") 
 ```
 
 ```{r}
-VlnPlot(sbs_white, features = "monocle_pseudotime", group.by = "progen_clusters", cols=c(prog_cols, pal), pt.size = 0) +
+VlnPlot(sbs_white, features = "monocle_pseudotime", group.by = "time.progen_clusters", cols=c(prog_cols, pal_white), pt.size = 0) +
   scale_x_discrete(limits=c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3))))
-RidgePlot(sbs_white, features = "monocle_pseudotime", group.by = "progen_clusters", cols=c(prog_cols, pal)) +
+RidgePlot(sbs_white, features = "monocle_pseudotime", group.by = "time.progen_clusters", cols=c(prog_cols, pal_white)) +
   scale_y_discrete(limits=c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3))))
 ```
 
 ```{r}
-VlnPlot(sbs_beige, features = "monocle_pseudotime", group.by = "progen_clusters", cols=c(prog_cols, pal), pt.size = 0) +
+VlnPlot(sbs_beige, features = "monocle_pseudotime", group.by = "time.progen_clusters", cols=c(prog_cols, pal_beige), pt.size = 0) +
   scale_x_discrete(limits=c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3))))
-RidgePlot(sbs_beige, features = "monocle_pseudotime", group.by = "progen_clusters", cols=c(prog_cols, pal)) +
+RidgePlot(sbs_beige, features = "monocle_pseudotime", group.by = "time.progen_clusters", cols=c(prog_cols, pal_beige)) +
   scale_y_discrete(limits=c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3))))
 ```
 
@@ -194,14 +208,48 @@ RidgePlot(sbs_beige, features = "monocle_pseudotime", group.by = "progen_cluster
 meta_white = sbs_white@meta.data %>% mutate(pscondition = "white")
 meta_beige = sbs_beige@meta.data %>% mutate(pscondition = "beige")
 meta = rbind(meta_white, meta_beige)
+meta  = mutate(meta, sample_or_progen_cluster = 
+                    if_else(time.progen_clusters %in% c("day1","day3"), 
+                            meta$cond.time,  
+                            time.progen_clusters))
+meta$sample_or_progen_cluster = factor(meta$sample_or_progen_cluster, 
+                                       levels=c(prog_levels, c("day0","white.day1", "beige.day1","white.day3","beige.day3")))
 str(meta)
 table(meta$pscondition)
+table(meta$sample_or_progen_cluster)
+```
 
 
-ggplot(meta, aes(y=monocle_pseudotime, x=progen_clusters, fill=progen_clusters)) + geom_boxplot() +
-  facet_grid(pscondition~.) + scale_fill_manual(values=c(prog_cols, pal))
 
-ggplot(meta, aes(y=monocle_pseudotime, x=progen_clusters, fill=progen_clusters)) + geom_violin(scale="width")+
-  facet_grid(pscondition~.) + scale_fill_manual(values=c(prog_cols, pal), name="identity") + 
-  scale_x_discrete(limits=c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3))))
+### horizontal pseudotime
+
+```{r}
+ps_cols = c(prog_cols, pal_white[2:3])
+names(ps_cols) = c(names(prog_cols), "day1","day3")
+ggplot(filter(meta, sample_or_progen_cluster != "day0"), 
+       aes(x=monocle_pseudotime, y=time.progen_clusters, fill=time.progen_clusters)) + 
+    geom_violin(scale="width")+
+  facet_grid(pscondition~.) + scale_fill_manual(values=ps_cols, name="identity") + 
+  scale_y_discrete(limits=c(paste0("day",c(3,1)), rev(prog_levels)))
+```
+
+
+
+```{r}
+ggplot(filter(meta, sample_or_progen_cluster != "day0"), 
+       aes(x=monocle_pseudotime, y=time.progen_clusters, fill=sample_or_progen_cluster)) + 
+    geom_violin(scale="width")+
+  facet_grid(pscondition~.) + scale_fill_manual(values=c(prog_cols, pal[c(2,4,1,5)]), name="identity") + 
+  scale_y_discrete(limits=c(paste0("day",c(3,1)), rev(prog_levels)))
+```
+
+
+## Save
+
+```{r}
+if (subset_data == FALSE){
+  write.table(meta, here(odir,"monocle_pseudotime.tsv"), sep="\t", row.names = F, quote=F)
+} else if (subset_data){ #if subset, don't save complete analysis
+  write.table(meta, file =here(odir,"10%_monocle_pseudotime.tsv"), sep="\t", row.names = F, quote=F)
+}
 ```

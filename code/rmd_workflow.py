@@ -311,15 +311,27 @@ rule white_only_downsample:
 #already migrated: clustree
 
 ##cluster stability check & decide number of clusters
-                
-rule figure4:
-    '''Status TBA
-    '''
+rule white_only_markers:
     input:
         rdata = ODIR + "/complete_analysis.rds",
         marker_genes = ODIR + "/marker_genes.txt",
         GO_table =  ODIR +"/ORA_marker_genes.txt",
-        cluster_info = ODIR + "/cluster_composition.txt",
+        rmd = ADIR + "/white_only_downsample_markers_and_go.Rmd"
+    output:
+        report = ADIR + "/white_only_downsample_markers_and_go.html",
+        heatmap = ODIR + "/ORA_marker_genes_expression_matrix.tsv"
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"  
+                
+rule figure4:
+    '''Status: migrated
+    '''
+    input:
+        rdata = ODIR + "/complete_analysis.rds",#B&DUMAPs
+        cluster_info = ODIR + "/cluster_composition.txt",#C
+        heatmap = ODIR + "/ORA_marker_genes_expression_matrix.tsv",#Eheatmap
         rmd = ADIR + "/figure4_adipogenesis.Rmd"
     output:
         report = ADIR + "/white_only_downsample.html",
@@ -328,6 +340,57 @@ rule figure4:
     shell:
         "{params.cmd}"  
         
+##-------------------------------------------------##
+##        Adipogenesis Integration (for fig6)      ##
+##-------------------------------------------------##
+
+INDIR = ODIR
+ODIR = "output/adipogenesis/white_only_integration_trial"
+        
+rule white_only_integration_trial:
+    '''Status:  tbmigrated'''
+    input:
+        rdata = ODIR + "/complete_analysis.rds",
+        rmd = ADIR + "/white_only_integration_trial.Rmd"
+    output:
+        rdata = ODIR + "/complete_analysis.rds",
+        subset_rdata = ODIR + "/10%_complete_analysis.rds",
+        report = ADIR + "/white_only_integration_trial.html",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"  
+ODIR = "output/beige_vs_white/tss_fastmnn"        
+        
+rule white_only_fastmnn:
+    '''Status:  tbmigrated'''
+    input:
+        rdata = TSS_DIR + "/complete_analysis.rds",
+        rmd = ADIR + "/white_only_fastmnn_integration.Rmd"
+    output:
+        rdata = ODIR + "/complete_analysis.rds",
+        marker_genes = ODIR + "/marker_genes.txt",
+        GO_table =  ODIR +"/ORA_marker_genes.txt",
+        cluster_info = ODIR + "/cluster_composition.tsv",
+        report = ADIR + "/white_only_integration.html",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}" 
+    
+        
+rule white_only_monocle:
+    '''Status:  tbmigrated'''
+    input:
+        rdata = ODIR + "/complete_analysis.rds",
+        rmd = ADIR + "/white_only_fastmnn_monocle_umap.Rmd"
+    output:
+        white = ODIR + "/white_monocle_complete_analysis_umap.rds",
+        report = ADIR + "/white_only_fastmnn_monocle_umap.html",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}" 
         
 ##-------------------------------------------------##
 ##       Beige vs white (in early adipogenesis)    ##
@@ -575,12 +638,26 @@ rule tss_fastmnn_monocle:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
         "{params.cmd}" 
+        
+        
+rule tss_monocle_plots:
+    input:
+        white = ODIR + "/white_monocle_complete_analysis_umap.rds",
+        beige = ODIR + "/beige_monocle_complete_analysis_umap.rds",
+        rdata = ODIR + "/complete_analysis.rds",
+        rmd = ADIR + "/tss_fastmnn_monocle_umap_plots.R"
+    output: 
+        ODIR + "/monocle_pseudotime.tsv",
+        report = ADIR + "/tss_fastmnn_monocle_umap_plots.html",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}" 
 
 rule figure6:
     input:
-        #A umap integrated TSS clusters
-        white = ODIR + "/white_monocle_complete_analysis_umap.rds",
-        beige = ODIR + "/beige_monocle_complete_analysis_umap.rds",
+        beige = ODIR + "/beige_monocle_complete_analysis_umap.rds", #A&B Trajectory TSSs
+        ODIR + "/monocle_pseudotime.tsv", #C Violins
         rmd = "figures/figure6_early_adipogenic_trajectories.Rmd",
     output:
         report = "figures/figure6_early_adipogenic_trajectories.html"
