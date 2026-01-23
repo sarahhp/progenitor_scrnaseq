@@ -1,0 +1,131 @@
+---
+title: "beige_vs_white_scvi_integration"
+author: "Sarah Hazell Pickering"
+date: "2025-08-21"
+output: html_document
+---
+
+
+
+```{r libs, message=FALSE, warning=FALSE}
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+library(ggsci)
+library(here)
+```
+
+```{r params}
+module = "beige_vs_white"
+dataname = "scvi_integration"
+load_data = T #Loading initial seurat analysis
+subset_data = F
+
+rmd_filename = "bvw_scvi_integration"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+indir = here("output", module, "downsample")
+resolution = 0.3
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486","#E31A1C")
+clusters = MetBrewer::met.brewer("Redon", 12)
+```
+
+## Read python object
+
+```{r}
+if (subset_data){
+  snhx = schard::h5ad2seurat(here(odir, "10%_complete_analysis.scviintegrated.h5ad"))
+  Idents(snhx) = "seurat_clusters"
+} else{
+  snhx = schard::h5ad2seurat(here(odir, "complete_analysis.scviintegrated.h5ad"))
+}
+for (red in names(snhx@reductions)){
+  print(red)
+  new_name = gsub("X|_","",red)
+  snhx[[new_name]] = snhx[[red]]
+  snhx[[red]] = NULL
+}
+snhx
+head(snhx@meta.data)
+```
+
+```{r}
+DimPlot(snhx, reduction = "scVI", cols=clusters)
+```
+
+
+
+```{r}
+snhx$initial_clusters = snhx$seurat_clusters
+snhx[["initial.umap"]] = snhx[["umap"]]
+snhx[["initial.tsne"]] = snhx[["tsne"]]
+```
+
+```{r}
+DimPlot(snhx, reduction="initial.umap", cols=clusters, group.by="seurat_clusters",label=T, shuffle = T)
+```
+
+
+## SCVI Integration
+
+```{r setup-variables-SCVI}
+method_name="scVI"
+red_name = method_name
+umap_name = paste("umap", sep=".", method_name)
+clu_name = paste( method_name, sep="_", "clusters")
+tsne_name = paste("tsne", sep=".", method_name)
+```
+
+```{r basic_analysis}
+snhx <- FindNeighbors(snhx, reduction =  red_name, dims = 1:20, verbose=F)
+snhx <- FindClusters(snhx, resolution = resolution, cluster.name =  clu_name)
+snhx <- RunUMAP(snhx, reduction = red_name, dims = 1:20, reduction.name = umap_name)
+```
+
+```{r}
+DimPlot(snhx, reduction = umap_name,  group.by = clu_name, label=T,  shuffle = T)
+DimPlot(snhx, reduction = umap_name,  group.by = "cond.time", cols=pal, shuffle = T)
+DimPlot(snhx, reduction = umap_name,  group.by = "initial_clusters", label=T, cols=clusters, shuffle = T)
+DimPlot(snhx, reduction = "initial.umap",  group.by = clu_name, label=T, shuffle = T)
+```
+
+```{r}
+snhx = RunTSNE(snhx, reduction = red_name, dims = 1:20, reduction.name = tsne_name)
+```
+
+```{r}
+DimPlot(snhx, reduction = tsne_name,  group.by = clu_name, label=T, shuffle = T)
+DimPlot(snhx, reduction = tsne_name,  group.by = "cond.time", cols=pal, shuffle = T)
+DimPlot(snhx, reduction = tsne_name,  group.by = "initial_clusters", label=T, cols=clusters)
+DimPlot(snhx, reduction = "initial.tsne",  group.by = clu_name, label=T, shuffle = T)
+```
+
+```{r save}
+if (subset_data == FALSE){
+  saveRDS(snhx, file = here(odir, "complete_analysis.rds"))
+  sub = subset(snhx, downsample=1000)
+  saveRDS(sub,here(odir, "10%_complete_analysis.rds"))
+} else if (subset_data){ #if subset, don't save complete analysis
+  saveRDS(snhx,here(odir,"10%_subset_analysis.rds"))
+}
+```

@@ -69,17 +69,22 @@ table(beige$progen_clusters)
 
 ```{r Alarge_umap}
 p=plot_cells(beige, color_cells_by = "initial_clusters", label_leaves = F, label_branch_points = F, 
-                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.5,  alpha = 0.5,  graph_label_size = 5)+
-  scale_colour_manual(values=clusters) + theme_hp
+                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.5,  alpha = 0.5,
+             graph_label_size = 5)+ theme_hp +
+    scale_colour_manual(values=clusters, name="TSS clusters", labels=function(x) paste0("t",x))  +
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size=5)))
 p$layers[[1]]$aes_params$colour = 'transparent' 
-p 
+p
+```
 
+
+```{r Alarge_umap_save}
 for (d in c("png","pdf")){
-    ggsave(here(fig_dir,paste0("Aggsave_monocle_UMAP.",d)), height=7, width=10, units="cm", dpi=600)
+    ggsave(phere(fig_dir,paste0("Aggsave_monocle_UMAP.",d)), dpi=600)
 }
 ```
 ## B Progenitor trajectories
-```{r}
+```{r Csplit_umap}
 beige_progen = beige[,subset(colData(beige), grepl("^p[0-7]",time.progen_clusters)) %>%row.names]
 w=plot_cells(beige_progen, color_cells_by = "progen_clusters", label_leaves = F, label_branch_points = F, 
                 trajectory_graph_color="black", label_cell_groups = F, cell_size=0.2)
@@ -89,7 +94,7 @@ w + facet_wrap(~ progen_clusters) +
     theme_hp + coord_cartesian(x=c(-11,11), y=c(-6, 6))
 
 for (d in c("png","pdf")){
-    ggsave(here(fig_dir,paste0("Bggsave_MonocleUMAPs.",d)), height=7, width=10, units="cm", dpi=600)
+    ggsave(here(fig_dir,paste0("Bggsave_MonocleUMAPs.",d)), dpi=600)
 }
 ```
 

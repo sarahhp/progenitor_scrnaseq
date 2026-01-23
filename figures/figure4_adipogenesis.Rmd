@@ -25,8 +25,8 @@ dataname = "white_only_downsample"
 load_data = T #loading data
 subset_data = F
 
-rmd_filename = "white_only_downsample_markers"
-i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+rmd_filename = "figure4_adipogenesis"
+i_am(file.path("figures", paste0(rmd_filename,".Rmd")))
 odir = here("output", module, dataname)
 
 ```
@@ -34,7 +34,7 @@ odir = here("output", module, dataname)
 
 ```{r setup}
 set.seed(8)
-fig_dir = here("analysis", module, "figures", rmd_filename)
+fig_dir = here("figures", rmd_filename)
 if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
 knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
                       dev = c("png","pdf"))

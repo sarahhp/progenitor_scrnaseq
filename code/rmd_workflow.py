@@ -136,7 +136,7 @@ rule progenitors_integration_trial:
         
 ### scvii integration has an indepdent snakemake file
 include: "run_scvi.py"
-#check the way I did it last time
+
 
 SCVI_DIR = "output/progenitors/scvi_integration"
 
@@ -307,11 +307,12 @@ rule white_only_downsample:
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
-        "{params.cmd}"          
+        "{params.cmd}"  
+        
 #already migrated: clustree
 
-##cluster stability check & decide number of clusters
 rule white_only_markers:
+    '''Status: complete'''
     input:
         rdata = ODIR + "/complete_analysis.rds",
         marker_genes = ODIR + "/marker_genes.txt",
@@ -326,7 +327,8 @@ rule white_only_markers:
         "{params.cmd}"  
                 
 rule figure4:
-    '''Status: migrated
+    '''Status: Complete
+    ? Add lazarescu? 
     '''
     input:
         rdata = ODIR + "/complete_analysis.rds",#B&DUMAPs
@@ -340,57 +342,6 @@ rule figure4:
     shell:
         "{params.cmd}"  
         
-##-------------------------------------------------##
-##        Adipogenesis Integration (for fig6)      ##
-##-------------------------------------------------##
-
-INDIR = ODIR
-ODIR = "output/adipogenesis/white_only_integration_trial"
-        
-rule white_only_integration_trial:
-    '''Status:  tbmigrated'''
-    input:
-        rdata = ODIR + "/complete_analysis.rds",
-        rmd = ADIR + "/white_only_integration_trial.Rmd"
-    output:
-        rdata = ODIR + "/complete_analysis.rds",
-        subset_rdata = ODIR + "/10%_complete_analysis.rds",
-        report = ADIR + "/white_only_integration_trial.html",
-    params:
-        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
-    shell:
-        "{params.cmd}"  
-ODIR = "output/beige_vs_white/tss_fastmnn"        
-        
-rule white_only_fastmnn:
-    '''Status:  tbmigrated'''
-    input:
-        rdata = TSS_DIR + "/complete_analysis.rds",
-        rmd = ADIR + "/white_only_fastmnn_integration.Rmd"
-    output:
-        rdata = ODIR + "/complete_analysis.rds",
-        marker_genes = ODIR + "/marker_genes.txt",
-        GO_table =  ODIR +"/ORA_marker_genes.txt",
-        cluster_info = ODIR + "/cluster_composition.tsv",
-        report = ADIR + "/white_only_integration.html",
-    params:
-        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
-    shell:
-        "{params.cmd}" 
-    
-        
-rule white_only_monocle:
-    '''Status:  tbmigrated'''
-    input:
-        rdata = ODIR + "/complete_analysis.rds",
-        rmd = ADIR + "/white_only_fastmnn_monocle_umap.Rmd"
-    output:
-        white = ODIR + "/white_monocle_complete_analysis_umap.rds",
-        report = ADIR + "/white_only_fastmnn_monocle_umap.html",
-    params:
-        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
-    shell:
-        "{params.cmd}" 
         
 ##-------------------------------------------------##
 ##       Beige vs white (in early adipogenesis)    ##
@@ -418,10 +369,10 @@ rule beige_vs_white_downsample:
         "{params.cmd}"  
 
 #rule bvw_markers_and_go:
-# '''Status: Migrated'''
+# '''Status: Knitted; no ouput files'''
 
 rule bvw_DE_per_time:
- '''Status: Migrated'''
+ '''Status: Complete'''
     input:
         rdata = ODIR + "/complete_analysis.rds",
         rmd = ADIR + "/beige_vs_white_downsample_DE_per_time.Rmd"
@@ -435,7 +386,7 @@ rule bvw_DE_per_time:
         "{params.cmd}"  
 
 rule bvw_cluster_tests:
-    '''Status: Migrated '''
+    '''Status: Complete '''
     input:
         rdata = ODIR + "/complete_analysis.rds",
         cluster_info = ODIR + "/cluster_composition.txt",
@@ -450,7 +401,7 @@ rule bvw_cluster_tests:
         "{params.cmd}"  
 
 rule bvw_DE_per_cluster:
-    '''Status: Migrated '''
+    '''Status: Complete '''
     input:
         rdata = ODIR + "/complete_analysis.rds",
         cluster_info = ODIR + "/cluster_composition_condition_time.tsv",
@@ -484,6 +435,92 @@ rule supp_figure5:
         "{params.cmd}"  
         
 ##-------------------------------------------------##
+##      Beige vs White Integration (for fig6)      ##
+##-------------------------------------------------##
+
+INDIR = ODIR
+ODIR = "output/beige_vs_white/bvw_integration_trial"
+        
+rule bvw_integration_trial:
+    '''Status:  Knitting'''
+    input:
+        rdata = ODIR + "/complete_analysis.rds",
+        rmd = ADIR + "/bvw_integration_trial.Rmd"
+    output:
+        rdata = ODIR + "/complete_analysis.rds",
+        subset_rdata = ODIR + "/10%_complete_analysis.rds",
+        report = ADIR + "/bvw_integration_trial.html",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"  
+        
+
+SCVI_DIR = "output/beige_vs_white/bvw_scvi_integration"
+config["scvi_dir"] = SCVI_DIR #passing variables between files e.g.run_scvi.py 
+config["indir"] = INDIR
+include: "run_scvi.py"
+
+rule bvw_scvi:
+    '''Status: Created'''
+    input:
+        anndata = SCVI_DIR + "/complete_analysis.scviintegrated.h5ad",
+        rmd = ADIR + "/bvw_scvi_integration.Rmd"
+    output:
+        report = ADIR + "/bvw_scvi_integration.html",
+        rdata = SCVI_DIR + "/complete_analysis.rds",
+        subset_rdata = SCVI_DIR + "/10%_complete_analysis.rds",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"  
+        
+rule supp_figS11_bvw_integration:
+    input:
+        tri_integr = ODIR + "/complete_analysis.rds",
+        scvi = SCVI_DIR + "/complete_analysis.rds",
+        rmd = ADIR + "supp_figS11_bvw_integration_trial.Rmd"
+    output:
+        report = ADIR + "supp_figS11_bvw_integration_trial.html"
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"
+        
+ODIR = "output/beige_vs_white/bvw_fastmnn"        
+        
+rule bvw_fastmnn:
+    '''Status:  created'''
+    input:
+        rdata = INDIR + "/complete_analysis.rds",
+        rmd = ADIR + "/bvw_fastmnn_integration.Rmd"
+    output:
+        rdata = ODIR + "/complete_analysis.rds",
+        marker_genes = ODIR + "/marker_genes.txt",
+        GO_table =  ODIR +"/ORA_marker_genes.txt",
+        cluster_info = ODIR + "/cluster_composition.tsv",
+        report = ADIR + "/bvw_fastmnn_integration.html",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}" 
+    
+## Decide to use UMAp or tsNE
+rule bvw_monocle:
+    '''Status:  tbCreated'''
+    input:
+        rdata = ODIR + "/complete_analysis.rds",
+        rmd = ADIR + "/bvw_fastmnn_monocle_umap.Rmd"
+    output:
+        white = ODIR + "/white_monocle_complete_analysis_umap.rds",
+        beige = ODIR + "/beige_monocle_complete_analysis_umap.rds",
+        report = ADIR + "/bvw_fastmnn_monocle_umap.html",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}" 
+        
+##-------------------------------------------------##
 ##                  TSS-level analysis             ##
 ##              of beige vs white data             ##
 ##-------------------------------------------------##
@@ -492,7 +529,7 @@ INDIR = "data/scafe/count/day0_to_day3_rep1"
 TSS_DIR = "output/beige_vs_white/tss_bvw_initial"
 
 rule tss_bvw_initial:
-    '''Status: Migrated'''
+    '''Status: Complete'''
     input:
         raw_counts = expand("{dir}/{sample}/matrix/{files}",
                         dir = INDIR,
@@ -515,13 +552,13 @@ rule tss_bvw_initial:
         "{params.cmd}"  
         
 # rule tss_markers_and_go:
-#     '''Status: Migrated'''
+#     '''Status: Knitting; no output files but good reference for PPARG tss plots and GOheatmap'''
 #  
 # rule tss_DE_per_time:
-#     '''Status: Migrated'''
+#     '''Status: Migrated; not in figures but background info'''
         
 rule tss_cluster_tests:
-    '''Status: Migrated'''
+    '''Status: Complete'''
     input:
         rdata = TSS_DIR + "/complete_analysis.rds",
         cluster_info = TSS_DIR + "/cluster_composition.tsv",
@@ -536,7 +573,7 @@ rule tss_cluster_tests:
         "{params.cmd}" 
 
 rule tss_DE_per_cluster:
-    '''Status: Migrated '''
+    '''Status: Complete '''
     input:
         rdata = TSS_DIR + "/complete_analysis.rds",
         cluster_info = TSS_DIR + "/cluster_composition_condition_time.tsv",
@@ -579,7 +616,7 @@ rule figure5:
 ODIR = "output/beige_vs_white/tss_integration_trial"
 
 rule tss_integration_trial:
-    '''Status: Migrated
+    '''Status: Complete
     Supp FigS8'''
     input:
         rdata = TSS_DIR + "/complete_analysis.rds",
@@ -626,7 +663,7 @@ rule tss_fastmnn_integration:
         "{params.cmd}" 
         
 rule tss_fastmnn_monocle:
-    '''Status:  migrated'''
+    '''Status:  Complete'''
     input:
         rdata = ODIR + "/complete_analysis.rds",
         rmd = ADIR + "/tss_fastmnn_monocle_umap.Rmd"
@@ -647,7 +684,7 @@ rule tss_monocle_plots:
         rdata = ODIR + "/complete_analysis.rds",
         rmd = ADIR + "/tss_fastmnn_monocle_umap_plots.R"
     output: 
-        ODIR + "/monocle_pseudotime.tsv",
+        pseudotime = ODIR + "/monocle_pseudotime.tsv",
         report = ADIR + "/tss_fastmnn_monocle_umap_plots.html",
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
@@ -657,7 +694,7 @@ rule tss_monocle_plots:
 rule figure6:
     input:
         beige = ODIR + "/beige_monocle_complete_analysis_umap.rds", #A&B Trajectory TSSs
-        ODIR + "/monocle_pseudotime.tsv", #C Violins
+        pseudotime = ODIR + "/monocle_pseudotime.tsv", #C Violins
         rmd = "figures/figure6_early_adipogenic_trajectories.Rmd",
     output:
         report = "figures/figure6_early_adipogenic_trajectories.html"

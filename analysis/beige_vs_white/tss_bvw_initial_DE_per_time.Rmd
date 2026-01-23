@@ -56,48 +56,6 @@ clusters = #ggsci::pal_simpsons()(13)[c(1:7,9:13)]
 spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
 ```
 
-
-```{r params}
-module="adipogenesis"
-dataname = "tss_bvw_initial"
-library(here); i_am(file.path("analysis", paste0(dataname,".Rmd")))
-
-odir = here("output", module, dataname) 
-
-load_data = T #loading data 
-subset_data = F
-```
-
-```{r libs, warning=F, message=F, echo=F}
-library(dplyr)
-library(tidyr)
-library(ggplot2)
-library(ggsci)
-library(ggrepel)
-library(Seurat)
-library(BPCells)
-library(RColorBrewer)
-library(clusterProfiler)
-library(enrichplot)
-```
-
-```{r}
-pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486","#E31A1C")
-clusters = #ggsci::pal_simpsons()(13)[c(1:7,9:13)]
-  tvthemes::gravityFalls_pal()(13)
-spectral = rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
-#define new theme
-theme_hp = theme_classic(base_size=15) + 
-  theme(axis.line = element_line(linewidth = 0.25),
-        axis.ticks = element_line(linewidth=0.25),
-        strip.background = element_blank(), # remove boxes around facet labels
-        )
-#set for all ggplots
-theme_set(theme_hp)
-knitr::opts_chunk$set(dev=c("png","pdf"))
-```
-
-
 ## Read data
 
 ```{r}
