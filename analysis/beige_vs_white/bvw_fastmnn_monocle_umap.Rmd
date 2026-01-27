@@ -1,0 +1,265 @@
+---
+title: "White & beige monocle umap"
+author: "Sarah Hazell Pickering"
+date: "2024-09-19"
+output: html_document
+---
+
+FastMNN integration at the TSS level.  No loop closing.  
+
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+library(here)
+library(monocle3)
+library(viridis)
+```
+
+```{r params}
+module = "beige_vs_white"
+method_name = "fastmnn"
+dataname = paste0("bvw_",method_name)
+load_data = T #loading data
+subset_data = F
+
+rmd_filename = "bvw_fastmnn_monocle_umap"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+```
+
+```{r setup}
+set.seed(8)
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+clusters = MetBrewer::met.brewer("Redon", 12)
+names(clusters) = 0:11
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+
+```{r}
+if (subset_data){
+  sbs = readRDS(here(odir, "10%_complete_analysis.rds"))
+  Idents(sbs) = "seurat_clusters"
+} else {
+  sbs = readRDS(here(odir,"complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+sbs
+```
+
+# White 
+## Split seurat object
+```{r}
+Idents(sbs) = "sample"
+table(Idents(sbs))
+white = subset(sbs, idents=c("asc_day0", "white_day1","white_day3"))
+white
+```
+
+```{r}
+Idents(white) = "initial_clusters"
+table(Idents(white))
+white$seurat_clusters = white$initial_clusters
+```
+
+```{r}
+DimPlot(white, reduction="umap") + scale_colour_manual(values=clusters)
+```
+
+## Convert to monocle object
+```{r warning=FALSE}
+cds = SeuratWrappers::as.cell_data_set(white)
+cds
+```
+
+```{r}
+p= plot_cells(cds, show_trajectory_graph = F, cell_stroke=0.35, reduction_method = "UMAP", color_cells_by="seurat_clusters") + 
+  scale_colour_manual(values=clusters)
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+Overwriting the UMAP slot with tSNE because there might be a bug
+```{r}
+cds = cluster_cells(cds)
+p= plot_cells(cds, show_trajectory_graph = F, color_cells_by = "partition", label_cell_groups = F)
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+```{r}
+cds = learn_graph(cds, close_loop = F)
+p=plot_cells(cds, color_cells_by = "seurat_clusters",
+           label_leaves=FALSE,
+           label_branch_points=FALSE, cell_stroke=0.35,
+           trajectory_graph_color = "black")+ 
+  scale_colour_manual(values=clusters)
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+
+## Order cells
+
+```{r}
+pick_root_node = function(cds,factor_name, start_bin){
+  cell_ids = which(colData(cds)[,factor_name]==start_bin)
+  closest_vertex <-  cds@principal_graph_aux[["UMAP"]]$pr_graph_cell_proj_closest_vertex
+  summary(closest_vertex)
+  closest_vertex <- as.matrix(closest_vertex[colnames(cds), ])
+  root_pr_nodes <- igraph::V(principal_graph(cds)[["UMAP"]])$name[as.numeric(names
+    (which.max(table(closest_vertex[cell_ids,]))))]
+return(root_pr_nodes)
+}
+pick_root_node(cds, "time","day0")
+pick_root_node(cds, "time","day1")
+pick_root_node(cds, "time","day3")
+```
+
+
+## Starting from proliferating cells
+
+```{r}
+cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "seurat_clusters", "7"))
+p=plot_cells(cds, color_cells_by = "pseudotime", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="red") + scale_colour_viridis()
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+
+## Adipogenic end point
+```{r}
+cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "seurat_clusters", "4"))
+p=plot_cells(cds, color_cells_by = "pseudotime", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="red") + scale_colour_viridis()
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+
+## Save
+
+```{r}
+if (subset_data == FALSE){
+  saveRDS(cds, here(odir,"white_monocle_complete_analysis_umap.rds"))
+} else if (subset_data){ #if subset, don't save complete analysis
+  saveRDS(cds, file =here(odir, "1%_white_monocle_subset_analysis_umap.rds") )
+}
+```
+
+# Beige
+
+## Split seurat object
+```{r}
+Idents(sbs) = "sample"
+table(Idents(sbs))
+beige = subset(sbs, idents=c("asc_day0", "beige_day1","beige_day3"))
+beige
+```
+
+```{r}
+Idents(beige) = "initial_clusters"
+table(Idents(beige))
+beige$seurat_clusters = beige$initial_clusters
+```
+
+```{r}
+DimPlot(beige, reduction="umap") + scale_colour_manual(values=clusters)
+```
+
+## Convert to monocle object
+```{r warning=FALSE}
+cds = SeuratWrappers::as.cell_data_set(beige)
+cds
+```
+
+```{r}
+p= plot_cells(cds, show_trajectory_graph = F, cell_stroke=0.35, reduction_method = "UMAP", color_cells_by="seurat_clusters") + 
+  scale_colour_manual(values=clusters)
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+
+```{r}
+cds = cluster_cells(cds)
+p= plot_cells(cds, show_trajectory_graph = F, color_cells_by = "partition", label_cell_groups = F)
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+```{r}
+cds = learn_graph(cds, close_loop = F)
+p=plot_cells(cds, color_cells_by = "seurat_clusters",
+           label_leaves=FALSE,
+           label_branch_points=FALSE, cell_stroke=0.35,
+           trajectory_graph_color = "black")+ 
+  scale_colour_manual(values=clusters)
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+
+## Order cells
+
+```{r}
+pick_root_node = function(cds,factor_name, start_bin){
+  cell_ids = which(colData(cds)[,factor_name]==start_bin)
+  closest_vertex <-  cds@principal_graph_aux[["UMAP"]]$pr_graph_cell_proj_closest_vertex
+  summary(closest_vertex)
+  closest_vertex <- as.matrix(closest_vertex[colnames(cds), ])
+  root_pr_nodes <- igraph::V(principal_graph(cds)[["UMAP"]])$name[as.numeric(names
+    (which.max(table(closest_vertex[cell_ids,]))))]
+return(root_pr_nodes)
+}
+pick_root_node(cds, "time","day0")
+pick_root_node(cds, "time","day1")
+pick_root_node(cds, "time","day3")
+```
+
+## Starting from proliferating cells
+
+```{r}
+cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "seurat_clusters", "7"))
+p=plot_cells(cds, color_cells_by = "pseudotime", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="red") + scale_colour_viridis()
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+## Adipogenic end point
+```{r}
+cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "seurat_clusters", "4"))
+p=plot_cells(cds, color_cells_by = "pseudotime", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="red") + scale_colour_viridis()
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+
+## Save
+
+```{r}
+if (subset_data == FALSE){
+  saveRDS(cds, here(odir,"beige_monocle_complete_analysis_umap.rds"))
+} else if (subset_data){ #if subset, don't save complete analysis
+  saveRDS(cds, file =here(odir,"1%_beige_monocle_subset_analysis_umap.rds") )
+}
+```

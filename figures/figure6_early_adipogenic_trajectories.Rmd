@@ -47,6 +47,8 @@ pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486", "#E31A1C")
 prog_cols = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00")
 prog_levels = c("p5","p4","p6","p3","p0","p1","p2")
 names(prog_cols) = paste0("p", 0:(length(prog_levels)-1))
+ps_cols = c(prog_cols, pal[2:1])
+names(ps_cols) = c(names(prog_cols),"day1","day3")
 ```
 
 ## TSS level trajectories
@@ -107,7 +109,6 @@ meta$time.progen_clusters = factor(meta$time.progen_clusters )
 
 
 ```{r Cmonocleviolin_stacked}
-ps_cols = c(prog_cols, pal[2:1])
 names(ps_cols) = c(names(prog_cols), "day1","day3")
 ggplot(filter(meta, sample_or_progen_cluster != "day0"), 
        aes(x=monocle_pseudotime, y=time.progen_clusters, fill=time.progen_clusters)) + 
@@ -129,7 +130,45 @@ ggplot(filter(meta, sample_or_progen_cluster != "day0"),
     labs(y="Progenitor cluster or time") +theme_hp
 ```
 
-# Adipogenesis
+# Beige vs white
+
+```{r bvw_setup}
+module = "beige_vs_white"
+dataname="bvw_fastmnn"
+odir = here("output", module, dataname)
+clusters =  MetBrewer::met.brewer("Redon", 12)
+```
+
+### read monocle
+```{r}
+monoclew = readRDS(here(odir,"white_monocle_complete_analysis_umap.rds"))
+monoclew$progen_clusters = paste0("p", monoclew$progen_clusters)
+table(monoclew$time.progen_clusters)
+
+monocleb = readRDS(here(odir,"beige_monocle_complete_analysis_umap.rds"))
+monocleb$progen_clusters = paste0("p", monocleb$progen_clusters)
+table(monocleb$time.progen_clusters)
+```
+
 ## D: UMAPs
 
+```{r}
+p=plot_cells(monoclew, color_cells_by = "time.progen_clusters", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.75,  alpha = 0.5,
+             graph_label_size = 5)+ theme_hp +
+    scale_colour_manual(values=ps_cols, name="Progenitor\ncluster\nor time", limits = c(names(prog_cols), "day1", "day3"))  +
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size=5)))
+p$layers[[1]]$aes_params$colour = 'transparent' 
+p
+```
+
+```{r}
+p=plot_cells(monocleb, color_cells_by = "time.progen_clusters", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.75,  alpha = 0.5,
+             graph_label_size = 5)+ theme_hp +
+    scale_colour_manual(values=ps_cols, name="Progenitor\ncluster\nor time", limits = c(names(prog_cols), "day1", "day3"))  +
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size=5)))
+p$layers[[1]]$aes_params$colour = 'transparent' 
+p
+```
 

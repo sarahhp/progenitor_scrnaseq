@@ -23,7 +23,7 @@ scvi.model.SCVI.setup_anndata(adata, batch_key="orig.ident")
 model = scvi.model.SCVI(adata, n_layers=2, n_latent=30, gene_likelihood="nb")
 
 print("Training")
-model.train()
+model.train(batch_size=256) #slightly larger batch size to speed up learning
 
 print("Saving the model")
 model.save(os.path.join(odir, "scvi_model"), overwrite=True)

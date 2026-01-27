@@ -457,9 +457,6 @@ rule bvw_integration_trial:
         
 
 SCVI_DIR = "output/beige_vs_white/bvw_scvi_integration"
-config["scvi_dir"] = SCVI_DIR #passing variables between files e.g.run_scvi.py 
-config["indir"] = INDIR
-include: "run_scvi.py"
 
 rule bvw_scvi:
     '''Status: Created'''

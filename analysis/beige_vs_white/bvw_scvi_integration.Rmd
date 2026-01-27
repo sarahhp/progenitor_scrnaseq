@@ -17,7 +17,7 @@ library(here)
 
 ```{r params}
 module = "beige_vs_white"
-dataname = "scvi_integration"
+dataname = "bvw_scvi_integration"
 load_data = T #Loading initial seurat analysis
 subset_data = F
 

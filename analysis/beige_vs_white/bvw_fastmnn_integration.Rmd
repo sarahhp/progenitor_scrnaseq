@@ -56,6 +56,7 @@ theme_hp = theme_classic(base_size = 15) +
 theme_set(theme_hp)
 pal = c("#1F78B4", "#85C2EA","#B3B3B3", "#F18486","#E31A1C")
 clusters = MetBrewer::met.brewer("Redon", 12)
+spectral =  rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral"))
 ```
 
 ```{r setup-variables-rpca}
@@ -115,7 +116,7 @@ sbs <- RunUMAP(sbs, reduction = red_name, dims = 1:20, spread=1.3, reduction.nam
 
 ```{r}
 DimPlot(sbs, reduction = umap_name,  group.by = clu_name, label=T, cols=clusters)
-DimPlot(sbs, reduction = umap_name,  group.by = "orig.ident", cols=pal)
+DimPlot(sbs, reduction = umap_name,  group.by = "cond.time", cols=pal)
 DimPlot(sbs, reduction = umap_name,  group.by = "initial_clusters", label=T, cols=clusters)
 DimPlot(sbs, reduction = "initial.umap",  group.by = clu_name, label=T, cols=clusters)
 ```
@@ -126,14 +127,21 @@ sbs = RunTSNE(sbs, reduction = red_name, dims = 1:30, reduction.name = tsne_name
 
 ```{r}
 DimPlot(sbs, reduction = tsne_name,  group.by = clu_name, label=T, cols=clusters)
-DimPlot(sbs, reduction = tsne_name,  group.by = "orig.ident", cols=pal)
+DimPlot(sbs, reduction = tsne_name,  group.by = "cond.time", cols=pal)
 DimPlot(sbs, reduction = tsne_name,  group.by = "initial_clusters", label=T, cols=clusters)
 DimPlot(sbs, reduction = "initial.tsne",  group.by = clu_name, label=T, cols=clusters)
 ```
 
+
+```{r}
+sbs[["umap"]] = sbs[[umap_name]]
+sbs[["tsne"]] = sbs[[tsne_name]]
+```
+
+
 ## No cells
 ```{r no_cells}
-ggplot(sbs@meta.data) + geom_bar(aes(x=sample, fill=sample)) + 
+ggplot(sbs@meta.data) + geom_bar(aes(x=cond.time, fill=cond.time)) + 
   scale_fill_manual(values=pal) + scale_y_continuous(expand=c(0,0), name="Cells")
 ```
 
@@ -145,7 +153,7 @@ DimPlot(sbs, reduction = "tsne", group.by="initial_clusters", cols=  tvthemes::g
 ## Cluster composition
 
 ```{r cluster_composition}
-composition = group_by(sbs@meta.data, sample,fastmnn_clusters, time, condition) %>%
+composition = group_by(sbs@meta.data, cond.time,fastmnn_clusters, time, condition) %>%
   dplyr::count(name="n_cells") %>%
   arrange(desc(n_cells))
 head(composition)
@@ -153,16 +161,16 @@ head(composition)
 
 
 ```{r cluster_comp_plots}
-ggplot(composition) + geom_bar(stat="identity",aes(x=sample, y=n_cells, fill=fastmnn_clusters)) + 
+ggplot(composition) + geom_bar(stat="identity",aes(x=cond.time, y=n_cells, fill=fastmnn_clusters)) + 
    scale_fill_manual(values=clusters, name="BvW RPCA\nclusters")+ scale_y_continuous(expand=c(0,0)) +
   theme(axis.text.x=element_text(angle=15, hjust=1))
-ggplot(composition) + geom_bar(stat="identity",aes(x=sample, y=n_cells, fill=fastmnn_clusters), position = "fill") +
+ggplot(composition) + geom_bar(stat="identity",aes(x=cond.time, y=n_cells, fill=fastmnn_clusters), position = "fill") +
   scale_fill_manual(values=clusters)+ scale_y_continuous(expand=c(0,0)) +
   theme(axis.text.x=element_text(angle=15, hjust=1))
-ggplot(composition) + geom_bar(stat="identity",aes(fill=sample, y=n_cells, x=fastmnn_clusters)) +
+ggplot(composition) + geom_bar(stat="identity",aes(fill=cond.time, y=n_cells, x=fastmnn_clusters)) +
   scale_fill_manual(values=pal)+ scale_y_continuous(expand=c(0,0)) +
   theme(axis.text.x=element_text(angle=15, hjust=1))
-ggplot(composition) + geom_bar(stat="identity",aes(fill=sample, y=n_cells, x=fastmnn_clusters), position = "fill") +
+ggplot(composition) + geom_bar(stat="identity",aes(fill=cond.time, y=n_cells, x=fastmnn_clusters), position = "fill") +
    scale_fill_manual(values=pal) + scale_y_continuous(expand=c(0,0)) +
   theme(axis.text.x=element_text(angle=15, hjust=1))
 ```
@@ -171,8 +179,8 @@ ggplot(composition) + geom_bar(stat="identity",aes(fill=sample, y=n_cells, x=fas
 
 ```{r umap}
 DimPlot(sbs, reduction="umap", label=T, shuffle = T, cols=clusters)
-DimPlot(sbs, reduction="umap", split.by = "sample", ncol=3, shuffle = T, cols=clusters)
-DimPlot(sbs, group.by="sample", cols=pal, shuffle = T)
+DimPlot(sbs, reduction="umap", split.by = "cond.time", ncol=3, shuffle = T, cols=clusters)
+DimPlot(sbs, group.by="cond.time", cols=pal, shuffle = T)
 ```
 
 
@@ -180,8 +188,8 @@ DimPlot(sbs, group.by="sample", cols=pal, shuffle = T)
 ## t-SNE
 ```{r tsne}
 DimPlot(sbs, reduction = "tsne",shuffle=T, cols=clusters)
-DimPlot(sbs, reduction="tsne", split.by = "sample", ncol=3, shuffle = T, cols=clusters)
-DimPlot(sbs, reduction = "tsne", group.by= "sample", shuffle = T, cols=pal)
+DimPlot(sbs, reduction="tsne", split.by = "cond.time", ncol=3, shuffle = T, cols=clusters)
+DimPlot(sbs, reduction = "tsne", group.by= "cond.time", shuffle = T, cols=pal)
 ```
 
 
@@ -193,9 +201,6 @@ Does densify, which increases speed at the cost of memory help?
 sbs = JoinLayers(sbs)
 norm.markers = FindAllMarkers(sbs, only.pos = T, min.pct=0.25, 
                               logfc.threshold = 0.5, densify=T)
-norm.markers = merge(norm.markers,
-                     sbs[["RNA"]][[c("simple_id","gene_name","proximity")]],
-                     by.x="gene", by.y="simple_id")
 norm.markers = arrange(norm.markers, p_val_adj, avg_log2FC)
 head(norm.markers); dim(norm.markers)
 
@@ -288,10 +293,8 @@ table(gsub("_.*","", some.molsig$term))
 ```
 
 ```{r}
-norm.markers = rename(norm.markers, simple_id=gene) #switch column names
-norm.markers = rename(norm.markers, gene=gene_name)
 norm.markers$cluster = factor(norm.markers$cluster, levels =0:11)
-all.genes = sbs[["RNA"]][["gene_name"]]
+all.genes = rownames(sbs)
 ```
 
 
@@ -424,10 +427,6 @@ DimPlot(sbs, reduction="tsne", group.by= "time.progen_clusters", label=F, shuffl
 
 ## Save
 
-```{r}
-sbs[["umap"]] = sbs[[umap_name]]
-sbs[["tsne"]] = sbs[[tsne_name]]
-```
 
 
 ```{r save}
@@ -439,7 +438,7 @@ if (subset_data == F){
             sep="\t", row.names = F)
   write.table(go, here(odir, "ORA_marker_genes.txt"),
             sep="\t", row.names = F)
-  Idents(sbs) = "sample"
+  Idents(sbs) = "cond.time"
   dwns = subset(sbs, downsample=1000)
   saveRDS(dwns, file = here(odir, "10%_complete_analysis.rds"))
 } else if (subset_data){
