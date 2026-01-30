@@ -22,7 +22,7 @@ module = "beige_vs_white"
 method_name = "fastmnn"
 dataname = paste0("bvw_",method_name)
 load_data = T #loading data
-subset_data = F
+subset_data = T
 
 rmd_filename = "bvw_fastmnn_monocle_umap"
 i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
@@ -160,7 +160,7 @@ p
 if (subset_data == FALSE){
   saveRDS(cds, here(odir,"white_monocle_complete_analysis_umap.rds"))
 } else if (subset_data){ #if subset, don't save complete analysis
-  saveRDS(cds, file =here(odir, "1%_white_monocle_subset_analysis_umap.rds") )
+  saveRDS(cds, file =here(odir, "10%_white_monocle_subset_analysis_umap.rds") )
 }
 ```
 
@@ -260,6 +260,6 @@ p
 if (subset_data == FALSE){
   saveRDS(cds, here(odir,"beige_monocle_complete_analysis_umap.rds"))
 } else if (subset_data){ #if subset, don't save complete analysis
-  saveRDS(cds, file =here(odir,"1%_beige_monocle_subset_analysis_umap.rds") )
+  saveRDS(cds, file =here(odir,"10%_beige_monocle_subset_analysis_umap.rds") )
 }
 ```

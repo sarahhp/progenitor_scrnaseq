@@ -22,7 +22,7 @@ def choose_indataname(wildcards):
     return(os.path.join(wildcards.dir, wildcards.module,indataname,"complete_analysis.rds"))
     
 
-rule all:
+rule test:
     input:
         expand("{dir}/{file}.h5ad",
                 dir = SCVI_DIR,

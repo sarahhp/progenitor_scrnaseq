@@ -10,8 +10,16 @@ if ! module -t list 2>&1 | grep -q "^${{MODULE}}$"; then
 Rscript -e \"Sys.setenv(RSTUDIO_PANDOC='/usr/lib/rstudio/resources/app/bin/quarto/bin/tools'); 
             rmarkdown::render('{}')\" 
 """
- #shell: module load RStudio/2023.12.1+402-1-R-4.2.1
- #or check whther loaded: RStudio/2023.12.1+402-1-R-4.2.1 (L)
+
+
+rule main_figures:
+    input:
+        "figures/figure2_progenitors_initial.html",
+        "figures/figure3_progenitors_integrated.html",
+        "figures/figure4_adipogenesis.html",
+        "figures/figure5_beige_vs_white.html",
+        "figures/figure6_early_adipogenic_trajectories.html"
+
 
 ##-------------------------------------------------##
 ##    Mature adipocytes (day 15) from 6 subjects   ##
@@ -158,9 +166,9 @@ rule supp_figS2_integration_trial:
     input:
         tri_integr = ODIR + "/complete_analysis.rds",
         scvi = SCVI_DIR + "/complete_analysis.rds",
-        rmd = ADIR + "supp_figS2_progenitor_integration_trial.Rmd"
+        rmd = "figures/supp_figS2_progenitor_integration_trial.Rmd"
     output:
-        report = ADIR + "supp_figS2_progenitor_integration_trial.html"
+        report = "figures/supp_figS2_progenitor_integration_trial.html"
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
@@ -334,9 +342,9 @@ rule figure4:
         rdata = ODIR + "/complete_analysis.rds",#B&DUMAPs
         cluster_info = ODIR + "/cluster_composition.txt",#C
         heatmap = ODIR + "/ORA_marker_genes_expression_matrix.tsv",#Eheatmap
-        rmd = ADIR + "/figure4_adipogenesis.Rmd"
+        rmd = "figures/figure4_adipogenesis.Rmd"
     output:
-        report = ADIR + "/white_only_downsample.html",
+        report = "figures/figure4_adipogenesis.html",
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
@@ -476,9 +484,9 @@ rule supp_figS11_bvw_integration:
     input:
         tri_integr = ODIR + "/complete_analysis.rds",
         scvi = SCVI_DIR + "/complete_analysis.rds",
-        rmd = ADIR + "supp_figS11_bvw_integration_trial.Rmd"
+        rmd = "figures/supp_figS11_bvw_integration_trial.Rmd"
     output:
-        report = ADIR + "supp_figS11_bvw_integration_trial.html"
+        report = "figures/supp_figS11_bvw_integration_trial.html"
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
@@ -584,6 +592,8 @@ rule tss_DE_per_cluster:
     shell:
         "{params.cmd}" 
 
+ODIR = "output/beige_vs_white/downsample"
+
 rule figure5:
     input:
         #Beige vs white (gene level)
@@ -632,9 +642,9 @@ rule supp_figS10:
     '''tss_integration_trial'''
     input:
         rdata = ODIR + "/complete_analysis.rds",
-        rmd = ADIR + "/supp_figS10_tss_integration_trial.Rmd"
+        rmd = "figures/supp_figS10_tss_integration_trial.Rmd"
     output:
-        report = ADIR + "/supp_figS10_tss_integration_trial.html"
+        report = "figures/supp_figS10_tss_integration_trial.html"
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
@@ -679,20 +689,41 @@ rule tss_monocle_plots:
         white = ODIR + "/white_monocle_complete_analysis_umap.rds",
         beige = ODIR + "/beige_monocle_complete_analysis_umap.rds",
         rdata = ODIR + "/complete_analysis.rds",
-        rmd = ADIR + "/tss_fastmnn_monocle_umap_plots.R"
+        rmd = ADIR + "/tss_fastmnn_monocle_umap_plots.Rmd"
     output: 
         pseudotime = ODIR + "/monocle_pseudotime.tsv",
+        seurat_white = ODIR + "white_monocle_pseudotime_seurat.rds",
+        seurat_beige = ODIR + "beige_monocle_pseudotime_seurat.rds",
         report = ADIR + "/tss_fastmnn_monocle_umap_plots.html",
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
         "{params.cmd}" 
+   
+BVW_DIR = "output/beige_vs_white/bvw_fastmnn"     
+#Snakemake 6.0 and later, it is possible to inherit from previously defined rules
+use rule tss_monocle_plots as bvw_monocle_plots with:
+    input:
+        white = BVW_DIR + "/white_monocle_complete_analysis_umap.rds",
+        beige = BVW_DIR + "/beige_monocle_complete_analysis_umap.rds",
+        rdata = BVW_DIR + "/complete_analysis.rds",
+        rmd = ADIR + "/bvw_fastmnn_monocle_umap_plots.Rmd"
+    output: 
+        pseudotime = BVW_DIR + "/monocle_pseudotime.tsv",
+        seurat_white = BVW_DIR + "white_monocle_pseudotime_seurat.rds",
+        seurat_beige = BVW_DIR + "beige_monocle_pseudotime_seurat.rds",
+        report = ADIR + "/bvw_fastmnn_monocle_umap_plots.html",
+        
+#include: "run_g2g.py"    
 
 rule figure6:
     input:
         beige = ODIR + "/beige_monocle_complete_analysis_umap.rds", #A&B Trajectory TSSs
         pseudotime = ODIR + "/monocle_pseudotime.tsv", #C Violins
         rmd = "figures/figure6_early_adipogenic_trajectories.Rmd",
+        gwhite = BVW_DIR + "/white_monocle_complete_analysis_umap.rds", #F? or D
+        gbeige = BVW_DIR + "/beige_monocle_complete_analysis_umap.rds",
+        gpseudotime = BVW_DIR + "/monocle_pseudotime.tsv",
     output:
         report = "figures/figure6_early_adipogenic_trajectories.html"
     params:
@@ -700,7 +731,27 @@ rule figure6:
     shell:
         "{params.cmd}"        
 
-
+SUPP_FIGS = [
+     "figures/supp_figS2_progenitor_integration_trial.html",
+     
+     "figures/supp_figS5_beige_vs_white-gene_level.html",
+     
+     "figures/supp_figS10_tss_integration_trial.html",
+     "figures/supp_figS11_bvw_integration_trial.html",
+     
+]
+rule supp_figure:
+     input:
+         SUPP_FIGS
+         
+rule all:
+    input: 
+        "figures/figure2_progenitors_initial.html",
+        "figures/figure3_progenitors_integrated.html",
+        "figures/figure4_adipogenesis.html",
+        "figures/figure5_beige_vs_white.html",
+        "figures/figure6_early_adipogenic_trajectories.html",
+        SUPP_FIGS
 
 
 

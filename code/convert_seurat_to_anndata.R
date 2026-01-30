@@ -1,7 +1,7 @@
-library(sceasy)
-library(BPCells)
-library(Seurat)
-library(reticulate)
+library(sceasy, quietly = T)
+library(BPCells, quietly = T)
+library(Seurat, quietly = T)
+library(reticulate, quietly = T)
 library(here); i_am("code/rscript_sceasy.R")
 use_condaenv('sceasy')
 

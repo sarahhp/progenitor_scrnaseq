@@ -17,3 +17,6 @@ logs
 screenlog*
 analysis/*/figures/*/*.pdf
 *model.pt
+__pycache__
+*.pkl
+

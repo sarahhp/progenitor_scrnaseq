@@ -15,6 +15,8 @@ library(ggplot2)
 library(here)
 library(monocle3)
 library(viridis)
+library(ggpubr)
+library(effsize)
 ```
 
 ```{r params}
@@ -138,7 +140,7 @@ plot_cells(beige, label_leaves = F, label_branch_points = F,
            graph_label_size = 5)
 ```
 
-## Violin plot of pseudotime
+## Add psueodtime to seurat object
 
 ```{r}
 if (subset_data){
@@ -166,6 +168,18 @@ sbs_beige$monocle_pseudotime =   scales::rescale(sbs_beige$raw_pseudotime, to = 
 sbs_beige$pscondition ="beige"
 ```
 
+save for g2g_alignment
+```{r}
+if (subset_data){
+    saveRDS(sbs_white, file=here(odir, "10%_white_monocle_pseudotime_seurat.rds"))
+    saveRDS(sbs_beige, file=here(odir, "10%_beige_monocle_pseudotime_seurat.rds"))
+} else if (!subset_data){
+    saveRDS(sbs_white, file=here(odir, "white_monocle_pseudotime_seurat.rds"))
+    saveRDS(sbs_beige, file=here(odir, "beige_monocle_pseudotime_seurat.rds"))
+}
+
+```
+
 ```{r }
 merged_obj <- merge(x = sbs_white, y = sbs_beige, add.cell.ids = c("white","beige"), merge.dr = F)
 merged_obj
@@ -173,35 +187,129 @@ merged_obj$progen_clusters = factor(merged_obj$progen_clusters, levels=c(paste0(
 head(merged_obj@meta.data)
 ```
 
+
+## Pseudotime white vs beige
+
 ```{r paired_ridge_plot}
 VlnPlot(merged_obj, features = "monocle_pseudotime", group.by = "time.progen_clusters", split.by="pscondition",
         cols= c( "#FF7F00","#1F78B4"), pt.size = 0, split.plot = T) +
-  scale_x_discrete(limits = c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3)))) +
+  scale_x_discrete(limits = c(prog_levels, paste0("day",c(0,1,3)))) +
   ylab("Pseudotime")
 
 
 VlnPlot(merged_obj, features = "raw_pseudotime", group.by = "time.progen_clusters", split.by="pscondition",
         cols= c( "#FF7F00","#1F78B4"), pt.size = 0, split.plot = T) +
-  scale_x_discrete(limits = c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3)))) +
+  scale_x_discrete(limits = c(prog_levels, paste0("day",c(0,1,3)))) +
   ylab("Pseudotime")
 VlnPlot(merged_obj, features = "monocle_pseudotime", group.by = "time.progen_clusters",split.by="pscondition",
         cols= c( "#FF7F00","#1F78B4"), pt.size = 0) +
-  scale_x_discrete(limits = c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3)))) +
+  scale_x_discrete(limits =c(prog_levels, paste0("day",c(0,1,3)))) +
   ylab("Pseudotime") 
 ```
 
+### Wilcox Test
+n is too large to get a real view from this
 ```{r}
-VlnPlot(sbs_white, features = "monocle_pseudotime", group.by = "time.progen_clusters", cols=c(prog_cols, pal_white), pt.size = 0) +
-  scale_x_discrete(limits=c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3))))
-RidgePlot(sbs_white, features = "monocle_pseudotime", group.by = "time.progen_clusters", cols=c(prog_cols, pal_white)) +
-  scale_y_discrete(limits=c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3))))
+table(merged_obj$time.progen_clusters,merged_obj$pscondition,useNA="ifany")
+head (merged_obj@meta.data)
+
+group_by (merged_obj@meta.data, time.progen_clusters, pscondition) %>% summarise(mean_pseudotime = mean(monocle_pseudotime))
+compare_means(monocle_pseudotime~pscondition, group.by ="time.progen_clusters",
+              data=filter(merged_obj@meta.data,!grepl("day", time.progen_clusters)))
+
+compare_means(monocle_pseudotime~pscondition, group.by ="time.progen_clusters",
+              data=filter(merged_obj@meta.data,!grepl("day", time.progen_clusters)), 
+              method = "kruskal.test")
+```
+### Cohens D
+```{r}
+pairwise.cohen.d = function(comparisons, all_counts){
+  per_time = list()
+
+  for (comp in comparisons){
+    d = cohen.d(filter(all_counts, group==comp[[1]]) %>% pull(counts), 
+                filter(all_counts, group== comp[[2]]) %>% pull(counts),
+                na.rm = T, pooled = T)
+    per_time[[paste(comp, collapse = ".v.")]] = d$estimate *-1 #reverse direction
+  }
+  return(per_time)
+}
+```
+
+
+```{r}
+comparisons = list(prog_levels[1:2],
+                   prog_levels[2:3],
+                   prog_levels[3:4],
+                   prog_levels[4:5],
+                   prog_levels[5:6],
+                    prog_levels[6:7]
+                   )
+
+cell_info = sbs_white@meta.data
+cell_info$group = cell_info$time.progen_clusters
+cell_info$counts = cell_info$monocle_pseudotime
+pairwise.cohen.d(comparisons, cell_info)
+
+beige_info = sbs_beige@meta.data
+beige_info$group = beige_info$time.progen_clusters
+beige_info$counts = beige_info$monocle_pseudotime
+pairwise.cohen.d(comparisons, beige_info)
 ```
 
 ```{r}
+all_info = merged_obj@meta.data
+all_info$group = paste(sep=".", all_info$pscondition, all_info$time.progen_clusters)
+all_info$counts = all_info$monocle_pseudotime
+table(all_info$group)
+
+per_condition = paste(sep=".",
+                      rep(c("white","beige"), 7),
+                      rep(prog_levels, each=2))
+per_condition
+```
+
+
+```{r}
+condlist = list()
+i = 1
+j=1
+while(j < length(per_condition)){
+    print(paste(j,i))
+    condlist[[i]] = per_condition[j:(j+1)]
+    i= i+1
+    j=j+2
+}
+condlist
+
+condlist[[1]][[2]]
+
+pairwise.cohen.d(condlist, all_info)
+```
+
+
+```{r}
+VlnPlot(sbs_white, features = "monocle_pseudotime", group.by = "time.progen_clusters", cols=c(prog_cols, pal_white), pt.size = 0) +
+  scale_x_discrete(limits=c(prog_levels, paste0("day",c(0,1,3))))
+RidgePlot(sbs_white, features = "monocle_pseudotime", group.by = "time.progen_clusters", cols=c(prog_cols, pal_white)) +
+  scale_y_discrete(limits=c(prog_levels, paste0("day",c(0,1,3))))
+```
+
+```{r}
+compare_means(monocle_pseudotime~time.progen_clusters, group.by ="pscondition",
+              data=filter(merged_obj@meta.data,!grepl("day", time.progen_clusters)))
+
+compare_means(monocle_pseudotime~time.progen_clusters, group.by ="pscondition",
+              data=filter(merged_obj@meta.data,!grepl("day", time.progen_clusters)),
+              method="t.test")
+```
+
+
+```{r}
 VlnPlot(sbs_beige, features = "monocle_pseudotime", group.by = "time.progen_clusters", cols=c(prog_cols, pal_beige), pt.size = 0) +
-  scale_x_discrete(limits=c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3))))
+  scale_x_discrete(limits=c(prog_levels, paste0("day",c(0,1,3))))
 RidgePlot(sbs_beige, features = "monocle_pseudotime", group.by = "time.progen_clusters", cols=c(prog_cols, pal_beige)) +
-  scale_y_discrete(limits=c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3))))
+  scale_y_discrete(limits=c(prog_levels, paste0("day",c(0,1,3))))
 ```
 
 ```{r}

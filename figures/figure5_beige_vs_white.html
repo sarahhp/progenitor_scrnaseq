@@ -491,7 +491,6 @@ to_plot </code></pre>
 ## 18 b9      0.399     0.718                 9 day1  white     0.475      0.401
 ## # ℹ 4 more variables: conf.int.2 &lt;dbl&gt;, clu_pval_star &lt;chr&gt;, cond.time &lt;fct&gt;,
 ## #   clu.cond.time &lt;chr&gt;</code></pre>
-<p>To do: Stars on b5 and b2</p>
 <pre class="r"><code>ggplot(to_plot, aes(x=condition, fill=clu.cond.time, y=prop))  +
   geom_hline(yintercept = 0.5, linewidth=0.4, colour=&quot;grey55&quot;) + 
   geom_bar(position=&quot;dodge&quot;, stat=&#39;identity&#39;, show.legend = F) + 
