@@ -130,7 +130,7 @@ if (subset_data){
 sbs
 ```
 
-```{r D_thresh=0.85}
+```{r D_thresh85}
 sbs$filt.lazarescu.celltype = "uncertain"
 sbs$filt.lazarescu.celltype[sbs$predicted.author_cell_type.score > 0.85] =  
   sbs$predicted.author_cell_type[sbs$predicted.author_cell_type.score > 0.85]
@@ -138,7 +138,7 @@ DimPlot(sbs, group.by = "filt.lazarescu.celltype", shuffle = T) +
     scale_colour_manual(values = c("#00A087", "#E64B35","grey")) + theme_hp
 ```
 
-```{r D_thresh=0.9}
+```{r D_thresh9}
 sbs$filt.lazarescu.celltype = "uncertain"
 sbs$filt.lazarescu.celltype[sbs$predicted.author_cell_type.score > 0.9] =  
   sbs$predicted.author_cell_type[sbs$predicted.author_cell_type.score > 0.9]
