@@ -1,0 +1,35 @@
+---
+title: "g2g_gene_summary"
+author: "Sarah Hazell Pickering"
+date: "2026-01-29"
+output: html_document
+---
+
+
+```{r}
+library(here)
+```
+
+
+```{r params}
+module = "beige_vs_white"
+method_name = "fastmnn"
+dataname = paste0("bvw_",method_name)
+load_data = T #loading data
+subset_data = F
+
+rmd_filename = "bvw_fastmnn_monocle_umap_plots"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+```
+
+```{r}
+g2g = read.table(here(odir, "g2g_alignment_genes.tsv"), header = T)
+head(g2g, n=20)
+
+```
+
+```{r}
+summary(g2g)
+```
+

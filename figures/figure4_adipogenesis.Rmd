@@ -70,7 +70,7 @@ sbs$fclusters = factor(sbs$seurat_clusters, levels=figure_order)
 
 ## B & D:UMAPs
 ```{r umap}
-DimPlot(sbs, reduction="umap", group.by="time", cols=pal[c(1,2,4)]) + theme_hp + 
+DimPlot(sbs, reduction="umap", group.by="time", cols=pal) + theme_hp + 
   theme(plot.title=element_blank())
 DimPlot(sbs, reduction="umap", cols=clusters, pt.size = 0.4) + theme_hp +
   scale_colour_manual(labels=function (x){gsub("^","a",x)}, name="Adipogenesis\nclusters",
@@ -138,12 +138,5 @@ h =Heatmap(go_matrix, show_column_names = F, column_split = cell_ids$fclusters,
 h
 
 ```
-
-
-
-
-
-
-
 
 

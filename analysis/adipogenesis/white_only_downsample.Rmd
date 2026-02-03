@@ -24,7 +24,7 @@ library(patchwork)
 module = "adipogenesis"
 dataname = "white_only_downsample"
 load_data = T
-subset_data = F
+subset_data = T
 
 rmd_filename = "white_only_downsample"
 i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
@@ -60,7 +60,7 @@ spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
 
 ```{r}
 if (subset_data){
-  filt = readRDS(here(indir, "10%_subset_analysis.rds"))
+  filt = readRDS(here(indir, "10%_complete_analysis.rds"))
   Idents(filt) = "seurat_clusters"
 } else{
   filt = readRDS(here(indir, "complete_analysis.rds"))

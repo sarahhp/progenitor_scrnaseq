@@ -19,17 +19,23 @@ from optbinning import ContinuousOptimalBinning
 
 output_file = snakemake.output[0]
 odir = os.path.dirname(output_file)
+subset_data = False
+import random 
+random.seed(10)
 #odir = "output/beige_vs_white/bvw_fastmnn"
 
-path = re.split(r"[/.]",odir )
+path = re.split(r"[/.]",odir)
 if path[0] in ["projects","home"]:
-    wdir = path.index("progenitor_scrnaseq")
+    wdir = path.index("output")
     module = path(wdir+1)
     dataname = path(wdir+2)
-else:
-    module = path[0]
-    dataname = path[1]
-fig_path = os.path.join("analysis", module, "figures", dataname +"_g2g"
+elif len(path) == 3:
+    module = path[1]
+    dataname = path[2]
+else: 
+    print("cannot determine module and dataname from filepath")
+fig_path = os.path.join("analysis", module, "figures", dataname +"_g2g")
+os.makedirs(fig_path, exist_ok=True)
 
 pal = {'day0':"#B3B3B3", 'day1':"#85C2EA", 'day3':"#1F78B4"}
 prog_cols = {"p0":"#DA1819","p1":"#691A93","p2":"#EBB400","p3":"#434D51",
@@ -39,9 +45,7 @@ clusters = dict(zip([str(i) for i in range(12)],
             ["#5b859e", "#1e395f" ,"#75884b", "#1e5a46", "#df8d71", "#af4f2f" ,
             "#d48f90", "#732f30", "#ab84a5", "#59385c", "#d8b847", "#b38711"]))
 bvw = ["#1F78B4","#FF7F00"]
-subset_data = True
-import random 
-random.seed(10)
+
 
 if subset_data:
     adata_ref = anndata.read_h5ad(odir + '/10%_white_monocle_pseudotime_seurat.h5ad') # Reference dataset
@@ -118,7 +122,7 @@ diff_genes = df.iloc[0:10,0].tolist()
 
 import pickle
 if subset_data:
-    with open(odir + '/g2g_aligner_10%.pkl', 'wb') as file:
+    with open(odir + '/10%_g2g_aligner.pkl', 'wb') as file:
         pickle.dump(aligner, file)
     df.to_csv(odir + "/10%_g2g_alignment_genes.tsv", sep='\t', index=False)
 elif not subset_data:

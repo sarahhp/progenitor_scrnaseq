@@ -10,7 +10,7 @@ data/cellranger/*
 data/scafe/count
 *bpcells*
 output/*/*/*.rds
-output/*.rds
+*.rds
 *.h5ad
 .snakemake
 logs
@@ -19,4 +19,5 @@ analysis/*/figures/*/*.pdf
 *model.pt
 __pycache__
 *.pkl
-
+idx.annoy
+ref.Rds

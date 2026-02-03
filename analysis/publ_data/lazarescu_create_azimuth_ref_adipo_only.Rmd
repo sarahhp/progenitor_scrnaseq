@@ -1,0 +1,212 @@
+---
+title: "lazarescu_create_azimuth_ref"
+author: "Sarah Hazell Pickering"
+date: "2025-11-10"
+output: html_document
+---
+
+Azimuth doesn't work well with knitting; so this is run interactively.  
+
+## setup
+```{r libs, message=FALSE, warning=FALSE}
+library(Azimuth)
+library(BPCells)
+library(Seurat)
+library(biomaRt)
+library(ggplot2)
+library(here)
+library(tidyr)
+```
+
+```{r params}
+module = "publ_data"
+dataname = "lazarescu2025"
+load_data = T
+subset_data = F
+
+rmd_filename = "lazarescu_create_azimuth_ref_adipo_only"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+indir = here("data/other_papers", dataname)
+odir = here(indir, "azimuth_reference")
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+clusters= c(rev(paletteer::paletteer_d("MetBrewer::Redon")),  RColorBrewer::brewer.pal("Dark2", n=8))
+```
+
+
+## load reference dataset/ Read python object
+
+```{r}
+if (subset_data){
+  ref = schard::h5ad2seurat(here(indir, "lazarescu2025_subq_all.h5ad"))
+  Idents(ref) = "author_cell_type"
+  ref = subset(ref, idents = c(paste("ASPC", 1:5), paste0("SA", 1:7)), downsample = 100)
+} else{
+  ref = schard::h5ad2seurat(here(indir, "lazarescu2025_subq_all.h5ad"))
+  Idents(ref) = "author_cell_type"
+  ref = subset(ref, idents = c(paste("ASPC", 1:5), paste0("SA", 1:7)))
+}
+for (red in names(ref@reductions)){
+  print(red)
+  new_name = gsub("X|_","",red)
+  ref[[new_name]] = ref[[red]]
+  ref[[red]] = NULL
+}
+ref
+head(ref@meta.data)
+```
+
+
+## Convert ensembl ids
+
+```{r}
+library("biomaRt")
+mart <- useMart(biomart = "ensembl",
+  dataset = "hsapiens_gene_ensembl",
+   host = "https://apr2020.archive.ensembl.org")
+
+annot = getBM(c("external_gene_name", "ensembl_gene_id"), 
+              filters = "ensembl_gene_id",
+              values =  rownames(ref),
+              mart = mart, useCache = F)
+
+head(annot, n=2); dim(annot) 
+
+ref
+
+to_sub = annot$external_gene_name
+names(to_sub ) = annot$ensembl_gene_id
+to_sub = to_sub[!duplicated(to_sub)]
+summary(is.na(to_sub))
+length(to_sub)
+
+#remove duplicate rownames
+ref = subset(ref, features = names(to_sub))
+ref
+
+#extract out counts layer; change rownames
+ref_mat <- LayerData(ref, layer = "data")
+dim(ref_mat)
+to_sub = to_sub[rownames(ref_mat)]
+rownames(ref_mat) <- to_sub
+
+#recreate the assay object
+new_ref <- CreateAssayObject(counts = ref_mat, min.cells = 0, min.features = 0)
+ref[["RNA"]] <- new_ref
+rm(new_ref, ref_mat)
+```
+
+
+```{r}
+DimPlot(ref, group.by = "author_cell_type") 
+```
+## Split layers 
+Have to do save the global SCT model.  Will use this later.  Then split the object so we can integrate https://github.com/satijalab/seurat/issues/8961
+```{r}
+refso = ref
+## Save global SCT model for Azimuth to use
+refso = SCTransform(refso, new.assay.name = "global.SCT", verbose=F)
+refso[["RNA"]] = split(refso[["RNA"]], f=ref$orig.ident)
+refso
+```
+
+## Preprocessing for Azimuth
+
+preprocessing
+```{r}
+DefaultAssay(refso) = "RNA"
+# Replicates the lazarescu PCA for Harmony Integration
+refso <- refso %>%
+      Seurat::NormalizeData(verbose = FALSE) %>%
+      FindVariableFeatures(selection.method = "vst", nfeatures = 3000, verbose=F) %>% 
+      ScaleData(features = rownames(refso), verbose = FALSE) 
+
+## Allows us to integrate into SCT assay (req. for Azimuth)
+refso = SCTransform(refso, new.assay.name = "sep.SCT", verbose=F) %>% 
+      RunPCA(verbose = FALSE)
+## Integrate using Harmony
+refso[["pca.initial"]] = refso[["pca"]]
+refso = IntegrateLayers(refso, method = HarmonyIntegration,
+  orig.reduction = "pca", new.reduction = 'harmony',
+  assay = "sep.SCT", verbose=F)
+## Need a single SCT model, so use the global model
+refso[["sep.SCT"]]@SCTModel.list <- refso[["global.SCT"]]@SCTModel.list
+```
+
+```{r}
+refso
+```
+
+
+## Find Neighbours & Run UMAP
+```{r}
+#refso <- FindNeighbors(refso, dims = 1:30, verbose = FALSE)
+refso = RunUMAP(refso, reduction = "harmony",dims=1:50, return.model = T, verbose=F)
+refso
+```
+
+```{r}
+DimPlot(refso, group.by = "author_cell_type")  
+DimPlot(refso, group.by = "orig.ident")  
+```
+
+```{r}
+colnames(ref@meta.data)
+table(ref$disease)
+table(ref$sex)
+table(ref$reported_diseases)
+
+```
+
+## Create azimuth
+
+```{r}
+refdata <- AzimuthReference(refso,
+    # Specify features to include as required
+    refDR="pca",
+    metadata = c("author_cell_type"),
+    refAssay = "sep.SCT"
+)
+refdata@tools
+Idents(refdata) = "author_cell_type"
+```
+
+
+```{r}
+if (subset_data == F){
+  saveRDS(refdata, here(odir, "ref.Rds"))
+  SaveAnnoyIndex(object = refdata[["refdr.annoy.neighbors"]], file = file.path(odir, "idx.annoy"))
+} else if (subset_data){
+  odir = here(odir, "10%_subset")
+  if (!dir.exists(odir)){dir.create(odir, recursive = T)}
+  saveRDS(refdata, file.path(odir, "ref.Rds"))
+  SaveAnnoyIndex(object = refdata[["refdr.annoy.neighbors"]], file = file.path(odir, "idx.annoy"))
+}
+```
+
+```{r}
+DimPlot(refdata) 
+DimPlot(refdata, cells = colnames(refdata)[ refdata$author_cell_type %in% 
+                                               c(paste("ASPC", 1:5), paste0("SA", 1:7))])  + 
+  scale_color_manual(values = clusters)
+```
+
+

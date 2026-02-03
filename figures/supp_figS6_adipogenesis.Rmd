@@ -1,0 +1,149 @@
+---
+title: "supp_figS6_adipogenesis"
+author: "Sarah Hazell Pickering"
+date: "2026-01-30"
+output: html_document
+---
+
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(ComplexHeatmap)
+library(Seurat)
+library(clusterProfiler)
+library(dplyr)
+library(enrichplot)
+library(ggplot2)
+library(ggsci)
+library(here)
+library(patchwork)
+```
+
+## setup
+```{r params}
+module = "adipogenesis"
+dataname = "white_only_downsample"
+load_data = T #loading data
+subset_data = F
+
+rmd_filename = "supp_figS6_adipogenesis"
+i_am(file.path("figures", paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#B3B3B3","#85C2EA","#1F78B4")
+clusters = ggsci::pal_simpsons()(13)[c(1:7,9:13)]
+names(clusters) = 0:11
+figure_order = as.character(c(8,3,1,11,7,0,9,10,6,4,2,5))
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+## Load seurat obj
+```{r}
+if (subset_data){
+  sbs = readRDS(here(odir, "emont/10%_subset_analysis.emont.rds"))
+} else {
+  sbs = readRDS(here(odir, "emont/complete_analysis.emont.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+sbs
+#format clusters
+sbs$fclusters = factor(sbs$seurat_clusters, levels=figure_order)
+```
+
+## A:PCAs
+```{r Apca}
+DimPlot(sbs, reduction="pca", group.by="time", cols=pal) + theme_hp + 
+  theme(plot.title=element_blank())
+```
+
+## B: Marker genes
+```{r}
+norm.markers = read.delim(here(odir, "marker_genes.txt"))
+table(norm.markers$cluster)
+norm.markers$cluster = factor(norm.markers$cluster, levels=0:11)
+```
+
+### Genes sorted logFC * pct.1
+```{r}
+top.markers = as.data.frame(norm.markers %>%
+    group_by(cluster) %>% filter(pct.1 > 0.7) %>% #also adding a minimum filter to show CD36 instead of LINC01197 for cluster a11
+    slice_max(n = 2, order_by = avg_log2FC*pct.1))
+top.markers
+```
+
+```{r Btop_markers_logfc_pct1}
+top.markers$gene = factor(top.markers$gene, levels=rev(unique(top.markers$gene)))
+markers.to.plot = filter(top.markers, gene %in% top.markers$gene)
+markers.to.plot$gene = factor(markers.to.plot$gene, levels=levels(top.markers$gene))
+
+markers.to.plot = mutate(markers.to.plot, cluster = factor(cluster, levels=figure_order)) %>%
+  arrange(cluster)
+markers.to.plot$gene = factor(markers.to.plot$gene, levels=unique(rev(markers.to.plot
+                                                                  $gene)))
+
+ggplot(markers.to.plot, aes(y=gene, size=abs(avg_log2FC), color=cluster,
+                    x=cluster)) + 
+  geom_point()  +
+  scale_color_manual(values=clusters, guide="none") +
+  scale_x_discrete(labels=function (x){gsub("^","a",x)}, name="Adipogenesis clusters") +
+  ylab("") + scale_size_continuous(name="log2FC")
+```
+
+## C: emont
+
+```{r Cemont_annot}
+sbs$filt.emont.celltype = "uncertain"
+sbs$filt.emont.celltype[sbs$predicted.celltype.l2.score > 0.75] =  
+  sbs$predicted.celltype.l2[sbs$predicted.celltype.l2.score > 0.75]
+DimPlot(sbs, group.by = "filt.emont.celltype", shuffle = T) + 
+    scale_colour_manual(values = c("#00A087", "#E64B35","grey")) + theme_hp
+```
+
+
+## D: Lazarescu
+
+```{r}
+if (subset_data){
+  sbs = readRDS(here(odir, "lazarescu/10%_subset_analysis.annot.rds"))
+} else {
+  sbs = readRDS(here(odir, "lazarescu/complete_analysis.annot.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+sbs
+```
+
+```{r D_thresh=0.85}
+sbs$filt.lazarescu.celltype = "uncertain"
+sbs$filt.lazarescu.celltype[sbs$predicted.author_cell_type.score > 0.85] =  
+  sbs$predicted.author_cell_type[sbs$predicted.author_cell_type.score > 0.85]
+DimPlot(sbs, group.by = "filt.lazarescu.celltype", shuffle = T) + 
+    scale_colour_manual(values = c("#00A087", "#E64B35","grey")) + theme_hp
+```
+
+```{r D_thresh=0.9}
+sbs$filt.lazarescu.celltype = "uncertain"
+sbs$filt.lazarescu.celltype[sbs$predicted.author_cell_type.score > 0.9] =  
+  sbs$predicted.author_cell_type[sbs$predicted.author_cell_type.score > 0.9]
+DimPlot(sbs, group.by = "filt.lazarescu.celltype", shuffle = T) + 
+    scale_colour_manual(values = c("#00A087", "#E64B35","grey")) + theme_hp
+```
+
+

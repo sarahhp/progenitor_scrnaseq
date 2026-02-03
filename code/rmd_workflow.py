@@ -21,13 +21,25 @@ rule main_figures:
         "figures/figure6_early_adipogenic_trajectories.html"
 
 
+ODIR = "output/bulk"
+ADIR = "analysis/bulk"
+
+rule render_rmd:
+    input:
+        dge = ODIR + "/beige_DGE_between_subjects.tsv",
+        rmd = ADIR + "/bulk_day15_RNAseq_expr.Rmd"
+    output:
+        report = ADIR + "/bulk_day15_RNAseq_expr.html"
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}" 
+
 ##-------------------------------------------------##
 ##    Mature adipocytes (day 15) from 6 subjects   ##
 ##                  bulk RNA-seq                   ##
 ##-------------------------------------------------##
 
-ODIR = "output/bulk"
-ADIR = "analysis/bulk"
 # 
 # rule bulk_DGE:
 #     input:
@@ -69,8 +81,6 @@ rule progenitors_initial:
                         sample = expand("day0_subjectS{s}", s=range(1,6)),
                         files = ["barcodes.tsv.gz","features.tsv.gz","matrix.mtx.gz"]),
         rmd = PRO_ADIR + "/progenitors_initial_seurat_analysis.Rmd"
-    params:
-        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     output:
         #bpcells = directory(expand("{dir}/bpcells/{sample}",
          #               dir = ODIR,
@@ -82,6 +92,8 @@ rule progenitors_initial:
         marker_genes = ODIR + "/marker_genes.txt",
         donor_markers =  ODIR +"/donor_marker_genes.txt",
         cluster_info = ODIR + "/cluster_composition.txt",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
         "{params.cmd}"
 
@@ -252,9 +264,6 @@ rule figure3:
     #integration trial + scvi
     #clustree/cluster stability
     #cell cycle
-        
-         
-
 
 ##-------------------------------------------------##
 ##        Adipogenesis day 0, day 1 & day3         ##
@@ -333,6 +342,49 @@ rule white_only_markers:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
         "{params.cmd}"  
+        
+rule emont:
+     '''status: Knitted'''
+    input:
+        rdata = ODIR + "/complete_analysis.rds",
+        rmd = ADIR + "/white_only_downsample_emont.Rmd"
+    output:
+        annot = ODIR + "/emont/complete_analysis_emont.rds",
+        report = ADIR + "/white_only_downsample_emont.html"
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}" 
+        
+rule make_lazaref:
+    '''status: Migrated
+    Knitting not possible, just for graphing
+    '''
+    input:
+        anndata = "data/other_papers/lazarescu2025/lazarescu_subq_all.h5ad",
+        rmd = "analysis/publ_data/lazarescu2025/lazarescu_create_azimuth_ref_adipo_only.Rmd"
+    output:
+        idx = expand("{dir}/azimuth_reference/{file}",
+                        dir = "output/publ_data/lazarescu2025",
+                        idx = ["idx.annoy","ref.Rds"])
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}" 
+        
+
+use rule render_rmd as lazarescu:
+     '''Status: Ran :)     Knitting not possible, just for graphing '''
+    input:
+        idx = expand("{dir}/azimuth_reference/{file}",
+                        dir = "output/publ_data/lazarescu2025",
+                        idx = ["idx.annoy","ref.Rds"]),
+        rmd = ADIR + "/white_only_downsample_downsample_lazarescu.Rmd"
+    output:
+        annot = ODIR + "/lazarescu/complete_analysis.annot.rds"
+     
+# rule miranda:
+#     '''Status tbcreated'''
                 
 rule figure4:
     '''Status: Complete
@@ -342,6 +394,8 @@ rule figure4:
         rdata = ODIR + "/complete_analysis.rds",#B&DUMAPs
         cluster_info = ODIR + "/cluster_composition.txt",#C
         heatmap = ODIR + "/ORA_marker_genes_expression_matrix.tsv",#Eheatmap
+        lazar = ODIR + "/lazarescu/complete_analysis.annot.rds",
+        annot = ODIR + "/emont/complete_analysis_emont.rds",
         rmd = "figures/figure4_adipogenesis.Rmd"
     output:
         report = "figures/figure4_adipogenesis.html",

@@ -32,8 +32,12 @@ def load_templates(path="templates.yaml"):
 # 3. Scan source project
 # -------------------------------
 def find_rmds(source_root, port_dir="analysis", pattern=""):
+    print("[INFO] seraching source dir",source_root)
     # If you’re porting out of workflowr, Rmds are under source_root/analysis
-    rmd_dir = os.path.join(source_root, port_dir)
+    subdirs = [d for d in os.listdir(source_root) if os.path.isdir(d)]
+    if "analysis" in subdirs:
+        rmd_dir = os.path.join(source_root, port_dir)
+    else: rmd_dir = source_root
     rmds = []
     for root, _, files in os.walk(rmd_dir):
         for fn in files:
@@ -367,9 +371,9 @@ def migrate_file(src_rmd, dest_root, tpls, categories, default_seed=1234, dry_ru
 
     dest_rmd = os.path.join(rmd_dir, new_fn_resolved)
     if dry_run:
-        info("Dry-run; preview first 3000 chars:")
+        info("Dry-run; preview first 2000 chars:")
         print("-" * 40)
-        print(new_content[:3000] + "...")
+        print(new_content[:2000] + "...")
         print("-" * 40)
     else:
         with open(dest_rmd, "w", encoding="utf-8") as f:
@@ -394,8 +398,8 @@ def main():
     info("Port‑out migration: workflowr → flexible Rmd")
     is_cwd_root = confirm("Is the current working dir the root dir for the workflow?")
     if is_cwd_root :
-        root = "./"#ask("Enter path to source repository (current workflowr or similar):")
-        dest = "./"#ask("Enter path to destination repository (target):")
+        root = "./"
+        dest = "./"
     else:
         root = ask("Enter path to source repository (current workflowr or similar):")
         dest = ask("Enter path to destination repository (target):")
