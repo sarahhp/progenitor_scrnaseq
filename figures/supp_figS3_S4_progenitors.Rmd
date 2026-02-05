@@ -1,0 +1,101 @@
+---
+title: "supp_S3_S4_progenitors"
+author: "Sarah Hazell Pickering"
+date: "2026-02-03"
+output: html_document
+---
+
+
+```{r libs, message=FALSE, warning=FALSE}
+library(Seurat)
+library(clustree)
+library(dplyr)
+library(ggplot2)
+library(here)
+library(tidyr)
+library(cowplot)
+```
+
+```{r params}
+module = "progenitors"
+dataname = "integration_trial"
+load_data = T #Loading initial seurat analysis
+subset_data = F
+
+rmd_filename = "progenitors_rpca_clustree"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#0A7EA8","#EF5780","#0A8550","#1C31D3","#EE9614","#670F39")
+clusters = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00","#AC8AD0", tvthemes::gravityFalls_pal()(10))
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+## Load clustree data
+
+```{r}
+mult = readRDS(here(odir,"multiple_resolutions.rds"))
+head(mult@meta.data)
+table(mult$rpca_clusters)
+```
+
+```{r}
+mult$red1_clusters = mult$rpca_clusters
+mult$red2_clusters = mult$harmony_clusters
+mult$red3_clusters = mult$fastmnn_clusters
+clustree(mult, prefix="red", suffix ="_clusters")
+```
+
+```{r}
+clustree(mult, prefix="res", suffix ="_clusters") + theme_void(base_size = 15) + theme_hp
+```
+
+
+```{r 3A_clustree}
+clustree(mult, prefix="res", suffix ="_clusters", edge_width=1) + 
+    theme_void(base_size = 15) + 
+    scale_colour_manual(values=c("grey","grey","coral",rep("grey", 5)), guide = "none") + 
+    geom_text(data=data.frame(res=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8)), aes(x=-10.5, y=8-(res*10), label=res,)) +
+    geom_text(data=data.frame("1"=1), aes(x=-10,y=7.75, label="Clustering\nresolution")) +
+    scale_size(name = "Cells (k)", range = c(5,12), labels=function(x) paste(x/1000, "k"), breaks=c(1000,10000,20000),
+               guide = guide_legend(order=1)) +
+    scale_edge_alpha(name="Prop.\nshared cells") + 
+    scale_edge_colour_gradientn(colours = c("black"), guide="none")
+```
+
+```{r}
+DimPlot(mult, group.by = c("res0.2_clusters","res0.3_clusters","res0.5_clusters","res0.8_clusters"),
+        pt.size =  0.1, shuffle=T) & theme_hp
+```
+
+```{r 3b_umaps}
+Idents(mult) = "rpca_clusters"
+DimPlot(mult, group.by = c("res0.2_clusters","res0.3_clusters","res0.5_clusters","res0.8_clusters"),
+        pt.size =  0.1, alpha = 0.5, shuffle=T) & theme_classic(base_size = 12) &
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank(),
+        plot.title = element_text(size=12)
+        )
+
+```
+

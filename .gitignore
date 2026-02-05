@@ -16,6 +16,7 @@ output/*/*/*.rds
 logs
 screenlog*
 analysis/*/figures/*/*.pdf
+analysis/*.pdf
 *model.pt
 __pycache__
 *.pkl

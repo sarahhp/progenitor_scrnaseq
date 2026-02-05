@@ -259,7 +259,10 @@ rule figure3:
     shell:
         "{params.cmd}"  
 
-#rule supp_progenitors:
+rule supp_figS3_4_progenitors:
+    '''Status: Witing'''
+    input:
+        mult = ODIR + "multiple_resolutions.rds"
     #unintergrated progenitor markers
     #integration trial + scvi
     #clustree/cluster stability
@@ -344,7 +347,7 @@ rule white_only_markers:
         "{params.cmd}"  
         
 rule emont:
-     '''status: Knitted'''
+    '''status: Knitted'''
     input:
         rdata = ODIR + "/complete_analysis.rds",
         rmd = ADIR + "/white_only_downsample_emont.Rmd"
@@ -356,39 +359,38 @@ rule emont:
     shell:
         "{params.cmd}" 
         
-rule make_lazaref:
-    '''status: Migrated
-    Knitting not possible, just for graphing
-    '''
-    input:
-        anndata = "data/other_papers/lazarescu2025/lazarescu_subq_all.h5ad",
-        rmd = "analysis/publ_data/lazarescu2025/lazarescu_create_azimuth_ref_adipo_only.Rmd"
-    output:
-        idx = expand("{dir}/azimuth_reference/{file}",
-                        dir = "output/publ_data/lazarescu2025",
-                        idx = ["idx.annoy","ref.Rds"])
-    params:
-        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
-    shell:
-        "{params.cmd}" 
+# rule make_lazaref:
+#     '''status: Migrated
+#     Knitting not possible, just for graphing
+#     '''
+#     input:
+#         anndata = "data/other_papers/lazarescu2025/lazarescu_subq_all.h5ad",
+#         rmd = "analysis/publ_data/lazarescu2025/lazarescu_create_azimuth_ref_adipo_only.Rmd"
+#     output:
+#         idx = expand("{dir}/azimuth_reference/{file}",
+#                         dir = "output/publ_data/lazarescu2025",
+#                         idx = ["idx.annoy","ref.Rds"])
+#     params:
+#         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+#     shell:
+#         "{params.cmd}" 
         
 
-use rule render_rmd as lazarescu:
-     '''Status: Ran :)     Knitting not possible, just for graphing '''
-    input:
-        idx = expand("{dir}/azimuth_reference/{file}",
-                        dir = "output/publ_data/lazarescu2025",
-                        idx = ["idx.annoy","ref.Rds"]),
-        rmd = ADIR + "/white_only_downsample_downsample_lazarescu.Rmd"
-    output:
-        annot = ODIR + "/lazarescu/complete_analysis.annot.rds"
+# use rule render_rmd as lazarescu:
+#      '''Status: Ran :)     Knitting not possible, just for graphing '''
+#     input:
+#         idx = expand("{dir}/azimuth_reference/{file}",
+#                         dir = "output/publ_data/lazarescu2025",
+#                         idx = ["idx.annoy","ref.Rds"]),
+#         rmd = ADIR + "/white_only_downsample_downsample_lazarescu.Rmd"
+#     output:
+#         annot = ODIR + "/lazarescu/complete_analysis.annot.rds"
      
 # rule miranda:
 #     '''Status tbcreated'''
                 
 rule figure4:
     '''Status: Complete
-    ? Add lazarescu? 
     '''
     input:
         rdata = ODIR + "/complete_analysis.rds",#B&DUMAPs
@@ -788,10 +790,10 @@ rule figure6:
 SUPP_FIGS = [
      "figures/supp_figS2_progenitor_integration_trial.html",
      
-     "figures/supp_figS5_beige_vs_white-gene_level.html",
+    # "figures/supp_figS6_beige_vs_white-gene_level.html",
      
      "figures/supp_figS10_tss_integration_trial.html",
-     "figures/supp_figS11_bvw_integration_trial.html",
+     #"figures/supp_figS11_bvw_integration_trial.html",
      
 ]
 rule supp_figure:
@@ -806,31 +808,6 @@ rule all:
         "figures/figure5_beige_vs_white.html",
         "figures/figure6_early_adipogenic_trajectories.html",
         SUPP_FIGS
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

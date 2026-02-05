@@ -225,7 +225,7 @@ umaps = plot_grid(rpcaA +labs(x=NULL) +theme(legend.position = "none"),
 ```{r all_plots}
 plot_grid(umaps, legend_plot, 
           rel_heights = c(1,0.15), ncol=1)  
-ggsave(here(fig_dir, "tss_integration_trial.png"), width = 18, height= 18, units="cm", dpi = 600)
+ggsave(here(fig_dir, "all_plots_A4_tss_integration_trial.png"), width = 18, height= 18, units="cm", dpi = 600)
 ```
 
 
@@ -265,7 +265,7 @@ p
 
 ```{r B_beige_progen_save}
 for (d in c("png","pdf")){
-    ggsave(p, here(fig_dir,paste0("B_beige_monocle_UMAP.",d)), dpi=600)
+    ggsave(p, filename = here(fig_dir,paste0("B_beige_monocle_UMAP.",d)), dpi=600)
 }
 ```
 
@@ -285,6 +285,6 @@ p
 
 ```{r B_white_progen_save}
 for (d in c("png","pdf")){
-    ggsave(p, here(fig_dir,paste0("B_white_monocle_UMAP.",d)), dpi=600)
+    ggsave(p, filename = here(fig_dir,paste0("B_white_monocle_UMAP.",d)), dpi=600)
 }
 ```

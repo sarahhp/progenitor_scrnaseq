@@ -216,7 +216,6 @@ shorten = function(ont) {
 ## Cluster GO res0.5
 
 ```{r go0.5}
-library(clusterProfiler)
 all.genes=rownames(filt)
 clgo = compareCluster(gene~cluster, data=filter(uniq.cluster.markers,p_val_adj < 0.01), 
                       fun="enricher", TERM2GENE = some.molsig, universe = all.genes)
