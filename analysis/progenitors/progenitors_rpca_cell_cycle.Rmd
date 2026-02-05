@@ -1,31 +1,36 @@
 ---
-title: "supp_S3_S4_progenitors"
+title: "progenitors_rpca_cell_cycle"
 author: "Sarah Hazell Pickering"
-date: "2026-02-03"
+date: "2024-08-12"
 output: html_document
 ---
 
-# setup
+
+To classify cell cycle stages we used TinyAtlas list from https://github.com/hbc/tinyatlas for G2M and S phase genes, calculated module scores using cellCycleScoring from seurat 
+
+An alternative to seurat's phase sorting mechanism is to use Model based clustering to classify cells into cell cycle states.  In the case where the expression threshold for both phases was met whichever phase had the higher aggregated expression was used.  Mclust from CRAN: Model-based clustering based on parameterized finite Gaussian mixture models. Models are estimated by EM algorithm initialized by hierarchical model-based agglomerative clustering. The optimal model is then selected according to BIC. 
+
 ```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
 library(Seurat)
-library(clustree)
 library(dplyr)
 library(ggplot2)
+library(ggsci)
 library(here)
-library(tidyr)
-library(cowplot)
+library(mclust)
 library(biomaRt)
 ```
 
 ```{r params}
 module = "progenitors"
-dataname = "integration_trial"
+dataname = "rpca"
 load_data = T #Loading initial seurat analysis
 subset_data = F
 
-rmd_filename = "progenitors_rpca_clustree"
+rmd_filename = "progenitors_rpca_cell_cycle"
 i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
 odir = here("output", module, dataname)
+
 ```
 
 
@@ -46,68 +51,16 @@ theme_hp = theme_classic(base_size = 15) +
         axis.ticks = element_line(linewidth = 0.25),
         strip.background = element_blank())
 theme_set(theme_hp)
+
 theme_zoom = theme_classic(30) &  
     theme(axis.line = element_line(linewidth = 0.5),
         axis.ticks = element_line(linewidth = 0.5),
         strip.background = element_blank()) 
-pal = c("#0A7EA8","#EF5780","#0A8550","#1C31D3","#EE9614","#670F39")
-clusters = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00","#AC8AD0", tvthemes::gravityFalls_pal()(10))
+clusters = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00","#AC8AD0", tvthemes::gravityFalls_pal()(5))
 spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
 ```
 
-# Supp FigS3 - Cluster resoltuions 
-## Load Clustree info
-
-```{r}
-mult = readRDS(here(odir,"multiple_resolutions.rds"))
-head(mult@meta.data)
-table(mult$rpca_clusters)
-```
-
-
-```{r}
-clustree(mult, prefix="res", suffix ="_clusters") + theme_void(base_size = 15) + theme_hp
-```
-
-
-```{r 3A_clustree}
-clustree(mult, prefix="res", suffix ="_clusters", edge_width=1) + 
-    theme_void(base_size = 15) + 
-    scale_colour_manual(values=c("grey","grey","coral",rep("grey", 5)), guide = "none") + 
-    geom_text(data=data.frame(res=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8)), aes(x=-10.5, y=8-(res*10), label=res,)) +
-    geom_text(data=data.frame("1"=1), aes(x=-10,y=7.75, label="Clustering\nresolution")) +
-    scale_size(name = "Cells (k)", range = c(5,12), labels=function(x) paste(x/1000, "k"), breaks=c(1000,10000,20000),
-               guide = guide_legend(order=1)) +
-    scale_edge_alpha(name="Prop.\nshared cells") + 
-    scale_edge_colour_gradientn(colours = c("black"), guide="none")
-```
-
-```{r}
-DimPlot(mult, group.by = c("res0.2_clusters","res0.3_clusters","res0.5_clusters","res0.8_clusters"),
-        pt.size =  0.1, shuffle=T) & theme_hp
-```
-
-```{r 3b_umaps}
-Idents(mult) = "rpca_clusters"
-DimPlot(mult, group.by = c("res0.2_clusters","res0.3_clusters","res0.5_clusters","res0.8_clusters"),
-        pt.size =  0.1, alpha = 0.5, shuffle=T) & theme_classic(base_size = 12) &
-  theme(axis.line = element_line(linewidth = 0.25),
-        axis.ticks = element_line(linewidth = 0.25),
-        strip.background = element_blank(),
-        plot.title = element_text(size=12)
-        )
-
-```
-
-# Supp FigS4 - Cell cycle
-
 ## load data
-
-```{r s4_params}
-dataname="rpca"
-odir = here("output", module, dataname)
-```
-
 
 ```{r}
 if (subset_data){
@@ -116,6 +69,13 @@ if (subset_data){
   filt = readRDS(here(odir, "complete_analysis.rds"))
 }
 filt
+```
+
+```{r C_inset_umap}
+DimPlot(filt, cols=clusters) + 
+    theme_hp + scale_colour_manual(values=clusters, name="Progenitor\ncluster", label = function(x) paste0("p",x))
+DimPlot(filt, cols=clusters, pt.size=0.75) + coord_cartesian(x=c(2,9),y=c(-6,1))+
+    theme_zoom + scale_colour_manual(values=clusters ,guide="none")
 ```
 
 
@@ -143,7 +103,6 @@ head(cell_cycle_genes)
 write.table(here("data/gene_sets/cell_cycle_genes_ensembl.tsv"))
 ```
 
-## Cell cycle scoring
 ```{r}
 filt <- CellCycleScoring(filt,
                       g2m.features = cell_cycle_genes$external_gene_name[cell_cycle_genes$phase == "G2/M"],
@@ -151,24 +110,14 @@ filt <- CellCycleScoring(filt,
 summary(filt$G2M.Score)
 ```
 
-## S4A Phase UMAP
-```{r 4Ascore_UMAP}
+```{r Aphase}
 phase_plots = FeaturePlot(filt, features=c( "G2M.Score","S.Score"), blend=T, ncol=2, combine=F, pt.size=0.5) 
 phase_plots[[3]] & theme_hp & theme(legend.position="none") & labs(title=NULL)
 phase_plots[[4]] & theme_zoom & labs(title=NULL)
 ```
 
-## S4B
-```{r 4Bvlnplot}
-VlnPlot(filt, features=c("G2M.Score", "S.Score"), group.by="rpca_clusters", cols=clusters, pt.size = 0) & 
-    theme_hp & scale_x_discrete(name = "Progenitor cluster", label=function(x) paste0("p",x)) &
-    scale_fill_manual(values=clusters, guide="none") &
-    labs( y="Average expression score")
-```
 
-## S4C - Score scatter plots
-
-```{r 4C_main_phasescatter}
+```{r Cphasescatter}
 FeatureScatter(filt, feature1="G2M.Score", feature2="S.Score", group.by="rpca_clusters", cols=clusters, pt.size=0.75)+ 
     theme_hp + labs(title=NULL) + 
     scale_colour_manual(values=clusters, name="Progenitor\ncluster", label = function(x) paste0("p",x),
@@ -176,19 +125,19 @@ FeatureScatter(filt, feature1="G2M.Score", feature2="S.Score", group.by="rpca_cl
     
 ```
 
-```{r 4C_inset_umap}
-DimPlot(filt, cols=clusters) + 
-    theme_hp + scale_colour_manual(values=clusters, name="Progenitor\ncluster", label = function(x) paste0("p",x))
-DimPlot(filt, cols=clusters, pt.size=0.75) + coord_cartesian(x=c(2,9),y=c(-6,1))+
-    theme_zoom + scale_colour_manual(values=clusters ,guide="none")
-```
 
 ```{r }
 ggplot(filt@meta.data) + geom_point(aes(x=G2M.Score, y=S.Score, colour=rpca_clusters))
 ```
 
+```{r Bvlnplot}
+VlnPlot(filt, features=c("G2M.Score", "S.Score"), group.by="rpca_clusters", cols=clusters, pt.size = 0) & 
+    theme_hp & scale_x_discrete(name = "Progenitor cluster", label=function(x) paste0("p",x)) &
+    scale_fill_manual(values=clusters, guide="none") &
+    labs( y="Average expression score")
+```
 
-## S4D Proportion plot
+## Proportion plot
 
 ```{r composition}
 composition = read.delim(here(odir, "cluster_composition.txt"))
@@ -196,6 +145,15 @@ composition$seurat_clusters = factor(composition$seurat_clusters, levels=c(0,1:m
 head(composition)
 
 clu_to_plot = c(4,5)
+ggplot(filter(composition, seurat_clusters %in% clu_to_plot)) + 
+  geom_bar(stat="identity",aes(x=donor_id, y=n_cells, fill=seurat_clusters)) + 
+  scale_y_continuous(expand = c(0.01, 0))+ 
+   scale_fill_manual(values=clusters[clu_to_plot+1])
+
+ggplot(filter(composition, seurat_clusters %in% clu_to_plot)) + 
+  geom_bar(stat="identity",aes(x=donor_id, y=cells_per_donor, fill=seurat_clusters), position = "dodge") + 
+  scale_y_continuous(expand = c(0.01, 0))+ 
+   scale_fill_manual(values=clusters[clu_to_plot+1])
 ```
 
 
@@ -206,5 +164,51 @@ ggplot(filter(composition, seurat_clusters %in% clu_to_plot)) +
    scale_fill_manual(values=clusters[clu_to_plot+1], labels=function(x) paste0("p", x)) +
     labs(x="Subject", y="Proportion of cells", fill="Progenitor\nclusters")
 ```
+
+Default seurat threshold is too low, setting any cell with high than 0 expression of these genes as cycling.  
+```{r default_phase}
+DimPlot(filt,
+        group.by= "Phase")+ theme_hp
+```
+
+## An alternative method for thresholding:
+
+```{r}
+g2m_model = Mclust(filt$G2M.Score, 2)
+plot(g2m_model, what="classification", main="Mclust Classification")
+filt@meta.data$g2m_model = as.factor(g2m_model$classification)
+ggplot(filt@meta.data) + geom_histogram(aes(x=G2M.Score, fill=g2m_model), bins=100)
+```
+
+```{r}
+s_model = Mclust(filt$S.Score, 2)
+filt@meta.data$s_model = as.factor(s_model$classification)
+ggplot(filt@meta.data) + geom_histogram(aes(x=S.Score , fill=s_model), bins=100)
+```
+
+## Decision tree
+
+```{r}
+filt$Phase = NA
+filt$Phase [filt$G2M.Score > 0 & filt$g2m_model == 2 &
+                (filt$s_model == 1 | filt$S.Score < filt$G2M.Score)] = "G2M"
+filt$Phase [filt$S.Score > 0 & filt$s_model == 2 &
+                (filt$g2m_model == 1 |  filt$G2M.Score < filt$S.Score)] = "S"
+filt$Phase[(filt$g2m_model == 1 & filt$s_model == 1)  |
+             (filt$S.Score < 0 & filt$G2M.Score < 0) ] = "G1"
+```
+
+
+```{r}
+table(filt$Phase, useNA = "ifany")
+ggplot(filt@meta.data) + geom_point(aes(x=G2M.Score, y=S.Score, colour=Phase))+ theme_hp
+ggplot(filt@meta.data) + geom_point(aes(x=G2M.Score, y=S.Score, colour=rpca_clusters)) + scale_color_manual(values=clusters) + theme_hp
+```
+
+```{r umap_phase}
+DimPlot(filt, group.by = "Phase")+ theme_hp
+DimPlot(filt, group.by = "Phase", reduction = "pca") + theme_hp
+```
+
 
 

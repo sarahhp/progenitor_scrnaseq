@@ -135,7 +135,7 @@ rule figure2:
 
 ## trial integration with different methods
 INDIR = ODIR
-ODIR = "output/progenitors/integration_trial"
+TRIAL_DIR = "output/progenitors/integration_trial"
 
 rule progenitors_integration_trial:
     ''' 
@@ -147,8 +147,8 @@ rule progenitors_integration_trial:
         rmd = PRO_ADIR + "/progenitors_integration_trial.Rmd"
     output:
         report = PRO_ADIR + "/progenitors_integration_trial.html",
-        rdata = ODIR + "/complete_analysis.rds",
-        subset_rdata = ODIR + "/10%_complete_analysis.rds",
+        rdata = TRIAL_DIR + "/complete_analysis.rds",
+        subset_rdata = TRIAL_DIR + "/10%_complete_analysis.rds",
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
@@ -176,7 +176,7 @@ rule progenitors_scvi:
         
 rule supp_figS2_integration_trial:
     input:
-        tri_integr = ODIR + "/complete_analysis.rds",
+        tri_integr = TRIAL_DIR + "/complete_analysis.rds",
         scvi = SCVI_DIR + "/complete_analysis.rds",
         rmd = "figures/supp_figS2_progenitor_integration_trial.Rmd"
     output:
@@ -193,11 +193,11 @@ rule progenitors_rpca_clustree:
     Status: Complete
     '''
     input:
-        rdata = ODIR + "/complete_analysis.rds",
+        rdata = TRIAL_DIR + "/complete_analysis.rds",
         rmd = PRO_ADIR + "/progenitors_rpca_clustree.Rmd"
     output:
         report = PRO_ADIR + "/progenitors_rpca_clustree.html",
-        rdata = ODIR + "/multiple_resolutions.rds",
+        rdata = TRIAL_DIR + "/multiple_resolutions.rds",
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
@@ -260,13 +260,21 @@ rule figure3:
         "{params.cmd}"  
 
 rule supp_figS3_4_progenitors:
-    '''Status: Witing'''
+    '''Status: Knitted'''
     input:
-        mult = ODIR + "multiple_resolutions.rds"
-    #unintergrated progenitor markers
-    #integration trial + scvi
-    #clustree/cluster stability
-    #cell cycle
+        mult = TRIAL_DIR + "multiple_resolutions.rds",#clustree
+        rdata = ODIR + "/complete_analysis.rds", #cell cycle
+        cluster_info = ODIR + "/cluster_composition.txt",
+        rmd = "figures/supp_figS3_4_progenitors.Rmd"
+        #unintergrated progenitor markers
+    output:
+        report = "figures/supp_figS3_4_progenitors.html"
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"  
+        
+
 
 ##-------------------------------------------------##
 ##        Adipogenesis day 0, day 1 & day3         ##
@@ -788,8 +796,9 @@ rule figure6:
         "{params.cmd}"        
 
 SUPP_FIGS = [
+     #"figures/supp_figS1_progenitors_unintegrated.html",
      "figures/supp_figS2_progenitor_integration_trial.html",
-     
+     "figures/supp_figS3_4_progenitors.html",
     # "figures/supp_figS6_beige_vs_white-gene_level.html",
      
      "figures/supp_figS10_tss_integration_trial.html",
