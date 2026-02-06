@@ -82,7 +82,7 @@ p
 
 ```{r Alarge_umap_save}
 for (d in c("png","pdf")){
-    ggsave(phere(fig_dir,paste0("Aggsave_monocle_UMAP.",d)), dpi=600)
+    ggsave(here(fig_dir,paste0("Aggsave_monocle_UMAP.",d)), dpi=600)
 }
 ```
 ## B Progenitor trajectories
@@ -105,7 +105,9 @@ for (d in c("png","pdf")){
 ```{r}
 meta= read.delim(here(odir, "monocle_pseudotime.tsv"))
 meta$time.progen_clusters = factor(meta$time.progen_clusters )
+meta$cond.time = factor(meta$cond.time, levels=c("white.day3","white.day1","asc.day0","beige.day1","beige.day3"))
 ```
+
 
 
 ```{r Cmonocleviolin_stacked}
@@ -130,6 +132,39 @@ ggplot(filter(meta, sample_or_progen_cluster != "day0"),
     labs(y="Progenitor cluster or time") +theme_hp
 ```
 
+## Density maps
+
+```{r}
+ggplot(meta, aes(x=monocle_pseudotime, fill=condition)) + geom_density(alpha=0.5) +
+    scale_fill_manual(values=pal[c(3,5,1)])
+ggplot(meta, aes(x=monocle_pseudotime, fill=pscondition)) + geom_density(alpha=0.5) +
+    scale_fill_manual(values=pal[c(5,1)])
+
+ggplot(meta, aes(x=monocle_pseudotime, fill=pscondition)) + 
+    geom_histogram(alpha=0.5, bins=15, position="identity") +
+    scale_fill_manual(values=pal[c(3,5,1)])
+
+ggplot(meta, aes(x=monocle_pseudotime, fill=pscondition)) + 
+    geom_histogram( alpha=0.5, bins=30, position = "identity") +
+    scale_fill_manual(values=pal[c(5,1)])
+
+ggplot(meta, aes(x=monocle_pseudotime, fill=time)) + geom_density(alpha=0.5) +
+    scale_fill_manual(values=pal[c(3,2,1)])
+
+ggplot(meta, aes(x=monocle_pseudotime, fill=cond.time)) + geom_density(alpha=0.5) +
+    scale_fill_manual(values=pal)
+```
+
+
+```{r}
+ggplot(meta, aes(x=monocle_pseudotime, fill=cond.time)) + geom_density(alpha=0.5) +
+    scale_fill_manual(values=c(pal ,"lavender","orange")) +  
+    geom_vline(xintercept = seq(from=0, to=1, length.out=16))
+
+```
+
+
+
 # Beige vs white
 
 ```{r bvw_setup}
@@ -149,6 +184,7 @@ monocleb = readRDS(here(odir,"beige_monocle_complete_analysis_umap.rds"))
 monocleb$progen_clusters = paste0("p", monocleb$progen_clusters)
 table(monocleb$time.progen_clusters)
 ```
+
 
 ## D: UMAPs
 
@@ -172,7 +208,19 @@ p$layers[[1]]$aes_params$colour = 'transparent'
 p
 ```
 
+## PLay with denisty maps
 
+```{r}
+bvwmeta = read.delim(here(odir, "monocle_pseudotime.tsv"))
+head(bvwmeta)
+
+ggplot(bvwmeta, aes(x=monocle_pseudotime, fill=pscondition)) + geom_density(alpha=0.5)
+ggplot(bvwmeta, aes(x=monocle_pseudotime, fill=cond.time)) + geom_density(alpha=0.5) +
+    scale_fill_manual(values=pal)
+
+ggplot(bvwmeta, aes(x=monocle_pseudotime, fill=time)) + geom_density(alpha=0.5) +
+    scale_fill_manual(values=pal[c(3,2,1)])
+```
 
 
 

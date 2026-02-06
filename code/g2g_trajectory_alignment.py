@@ -83,17 +83,24 @@ print(len(optb.splits))
 n_bins=15#int(np.mean([len(optw.splits),len(optb.splits)]))
 print("Using bins", n_bins)
 
-VisualUtils.plot_celltype_barplot(adata_ref, n_bins, "exp.time", pal)
-plt.savefig(fig_path + "/exp.time_barplot.png", format="png", dpi=300, bbox_inches="tight")
-plt.close()   
+def g2g_barplot(data, n_bins, colour_by, cols, fig_path =fig_path, device="png"):
+    outfile = "{}/{}_barplot.{}".format(fig_path, colour_by, device)
+    VisualUtils.plot_celltype_barplot(data, n_bins, colour_by, cols)
+    plt.savefig(outfile, format=device, dpi=300, bbox_inches="tight")
+    plt.close()
 
-VisualUtils.plot_celltype_barplot(adata_ref, n_bins, "initial_clusters", clusters)
-plt.savefig(fig_path +"/bvw_clusters_barplot.png", format="png", dpi=300, bbox_inches="tight")
-plt.close()   
+to_plot = {"exp.time":pal.values(),
+            "initial_clusters":clusters.values(),
+            "time.progen_clusters":prog_cols.values()}
+wout = os.path.join(fig_path,"white")
+os.makedirs(wout, exist_ok=True)
+for factor in to_plot.keys():
+    g2g_barplot(adata_ref, n_bins, factor, to_plot[factor], fig_path=wout)
 
-VisualUtils.plot_celltype_barplot(adata_ref, n_bins, "time.progen_clusters", prog_cols)
-plt.savefig(fig_path +"/progen_clusters_barplot.png", format="png", dpi=300, bbox_inches="tight")
-plt.close()   
+bout = os.path.join(fig_path,"beige")
+os.makedirs(bout, exist_ok=True)
+for factor in to_plot.keys():
+    g2g_barplot(adata_query, n_bins, factor, to_plot[factor], fig_path=bout)
 
 
 ### Run G2G alignment 

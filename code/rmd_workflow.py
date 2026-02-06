@@ -259,16 +259,16 @@ rule figure3:
     shell:
         "{params.cmd}"  
 
-rule supp_figS3_4_progenitors:
+rule supp_figS3_S4_progenitors:
     '''Status: Knitted'''
     input:
-        mult = TRIAL_DIR + "multiple_resolutions.rds",#clustree
+        mult = TRIAL_DIR + "/multiple_resolutions.rds",#clustree
         rdata = ODIR + "/complete_analysis.rds", #cell cycle
         cluster_info = ODIR + "/cluster_composition.txt",
-        rmd = "figures/supp_figS3_4_progenitors.Rmd"
+        rmd = "figures/supp_figS3_S4_progenitors.Rmd"
         #unintergrated progenitor markers
     output:
-        report = "figures/supp_figS3_4_progenitors.html"
+        report = "figures/supp_figS3_S4_progenitors.html"
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
@@ -511,16 +511,16 @@ rule supp_figure5:
 ##-------------------------------------------------##
 
 INDIR = ODIR
-ODIR = "output/beige_vs_white/bvw_integration_trial"
+TRIAL_DIR = "output/beige_vs_white/bvw_integration_trial"
         
 rule bvw_integration_trial:
-    '''Status:  Knitting'''
+    '''Status:  Knitted'''
     input:
-        rdata = ODIR + "/complete_analysis.rds",
+        rdata = INDIR + "/complete_analysis.rds",
         rmd = ADIR + "/bvw_integration_trial.Rmd"
     output:
-        rdata = ODIR + "/complete_analysis.rds",
-        subset_rdata = ODIR + "/10%_complete_analysis.rds",
+        rdata = TRIAL_DIR + "/complete_analysis.rds",
+        subset_rdata = TRIAL_DIR + "/10%_complete_analysis.rds",
         report = ADIR + "/bvw_integration_trial.html",
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
@@ -546,7 +546,7 @@ rule bvw_scvi:
         
 rule supp_figS11_bvw_integration:
     input:
-        tri_integr = ODIR + "/complete_analysis.rds",
+        tri_integr = TRIAL_DIR + "/complete_analysis.rds",
         scvi = SCVI_DIR + "/complete_analysis.rds",
         rmd = "figures/supp_figS11_bvw_integration_trial.Rmd"
     output:
@@ -576,7 +576,7 @@ rule bvw_fastmnn:
     
 ## Decide to use UMAp or tsNE
 rule bvw_monocle:
-    '''Status:  tbCreated'''
+    '''Status:  Knitted'''
     input:
         rdata = ODIR + "/complete_analysis.rds",
         rmd = ADIR + "/bvw_fastmnn_monocle_umap.Rmd"
@@ -588,6 +588,16 @@ rule bvw_monocle:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
         "{params.cmd}" 
+
+HARMONY ="output/beige_vs_white/bvw_harmony" 
+use rule bvw_monocle as bvw_monocle_harmony with:
+    input:
+        rdata = TRIAL_DIR + "/complete_analysis.rds",
+        rmd = ADIR + "/bvw_harmony_monocle_umap.Rmd"
+    output:
+        white = HARMONY + "/white_monocle_complete_analysis_umap.rds",
+        beige = HARMONY + "/beige_monocle_complete_analysis_umap.rds",
+        report = ADIR + "/bvw_harmony_monocle_umap.html",
         
 ##-------------------------------------------------##
 ##                  TSS-level analysis             ##

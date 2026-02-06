@@ -5,7 +5,7 @@ date: "2024-09-19"
 output: html_document
 ---
 
-FastMNN integration at the TSS level.  No loop closing.  
+FastMNN integration at the gene level.  No loop closing.  
 
 ```{r libs, message=FALSE, warning=FALSE}
 library(BPCells)
@@ -22,7 +22,7 @@ module = "beige_vs_white"
 method_name = "fastmnn"
 dataname = paste0("bvw_",method_name)
 load_data = T #loading data
-subset_data = T
+subset_data = F
 
 rmd_filename = "bvw_fastmnn_monocle_umap"
 i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
@@ -66,9 +66,9 @@ sbs
 # White 
 ## Split seurat object
 ```{r}
-Idents(sbs) = "sample"
+Idents(sbs) = "cond.time"
 table(Idents(sbs))
-white = subset(sbs, idents=c("asc_day0", "white_day1","white_day3"))
+white = subset(sbs, idents=c("asc.day0", "white.day1","white.day3"))
 white
 ```
 
@@ -136,7 +136,7 @@ pick_root_node(cds, "time","day3")
 ## Starting from proliferating cells
 
 ```{r}
-cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "seurat_clusters", "7"))
+cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "seurat_clusters", "8"))
 p=plot_cells(cds, color_cells_by = "pseudotime", label_leaves = F, label_branch_points = F, 
                 trajectory_graph_color="red") + scale_colour_viridis()
 p$layers[[1]]$aes_params$colour = 'transparent'
@@ -168,9 +168,9 @@ if (subset_data == FALSE){
 
 ## Split seurat object
 ```{r}
-Idents(sbs) = "sample"
+Idents(sbs) = "cond.time"
 table(Idents(sbs))
-beige = subset(sbs, idents=c("asc_day0", "beige_day1","beige_day3"))
+beige = subset(sbs, idents=c("asc.day0", "beige.day1","beige.day3"))
 beige
 ```
 
@@ -237,7 +237,7 @@ pick_root_node(cds, "time","day3")
 ## Starting from proliferating cells
 
 ```{r}
-cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "seurat_clusters", "7"))
+cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "seurat_clusters", "8"))
 p=plot_cells(cds, color_cells_by = "pseudotime", label_leaves = F, label_branch_points = F, 
                 trajectory_graph_color="red") + scale_colour_viridis()
 p$layers[[1]]$aes_params$colour = 'transparent'

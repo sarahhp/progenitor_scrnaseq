@@ -74,7 +74,15 @@ sbs
 Idents(sbs) = "cond.time"
 sbs = subset(sbs, idents = c("asc.day0","white.day1","white.day3"))
 Idents(sbs) = "seurat_clusters"
+all_var = VariableFeatures(sbs)
+sbs = FindVariableFeatures(sbs)
 variable.genes = VariableFeatures(sbs)
+```
+
+
+```{r}
+summary(variable.genes %in% all_var)
+tail(all_var[!all_var %in% variable.genes])
 ```
 
 

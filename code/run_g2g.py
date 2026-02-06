@@ -9,7 +9,7 @@ rule test:
     input:
         expand("{dir}/{file}.h5ad",
                 dir = "output/beige_vs_white/bvw_fastmnn",
-                file = "10%_white_monocle_pseudotime_seurat.h5ad")
+                file = "10%_white_monocle_pseudotime_seurat")
 
 rule seurat_to_anndata:
     ''' Version 2 loads the RStudio module and checks if it needs

@@ -164,7 +164,7 @@ detected = the number of detected features
 calculating for the unspliced 
 
 ```{r}
-sce$sample = factor(sce$sample, levels=c("asc_day0","white_day1","white_day1_rep2","white_day3"))
+sce$sample = factor(sce$sample, levels=c("beige_day3","beige_day1_rep2","beige_day1","asc_day0","white_day1","white_day1_rep2","white_day3"))
 sce <- addPerCellQC(sce, 
     subsets=list(Mito=grep("MT-", rownames(sce))),
     assay.type = "unspliced")
