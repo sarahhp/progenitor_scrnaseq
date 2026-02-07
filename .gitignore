@@ -22,3 +22,4 @@ __pycache__
 *.pkl
 idx.annoy
 ref.Rds
+model.pt
