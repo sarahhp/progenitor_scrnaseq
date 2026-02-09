@@ -372,12 +372,12 @@ dataname = &quot;integration_trial&quot;
 load_data = T #Loading initial seurat analysis
 subset_data = F
 
-rmd_filename = &quot;progenitors_rpca_clustree&quot;
-i_am(file.path(&quot;analysis&quot;, module, paste0(rmd_filename,&quot;.Rmd&quot;)))</code></pre>
+rmd_filename = &quot;supp_figS3_S4_progenitors&quot;
+i_am(file.path(&quot;figures&quot;, paste0(rmd_filename,&quot;.Rmd&quot;)))</code></pre>
 <pre><code>## here() starts at /projects/imb-pkbphil/sp/sc_rnaseq/progenitor_scrnaseq</code></pre>
 <pre class="r"><code>odir = here(&quot;output&quot;, module, dataname)</code></pre>
 <pre class="r"><code>set.seed(8)
-fig_dir = here(&quot;analysis&quot;, module, &quot;figures&quot;, rmd_filename)
+fig_dir = here(&quot;figures&quot;, rmd_filename)
 if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
 knitr::opts_chunk$set(fig.path = paste0(fig_dir, &quot;/&quot;),
                       dev = c(&quot;png&quot;,&quot;pdf&quot;))

@@ -23,8 +23,8 @@ dataname = "integration_trial"
 load_data = T #Loading initial seurat analysis
 subset_data = F
 
-rmd_filename = "progenitors_rpca_clustree"
-i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+rmd_filename = "supp_figS3_S4_progenitors"
+i_am(file.path("figures", paste0(rmd_filename,".Rmd")))
 odir = here("output", module, dataname)
 ```
 
