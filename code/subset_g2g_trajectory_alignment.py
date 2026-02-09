@@ -17,24 +17,12 @@ from genes2genes import VisualUtils
 
 from optbinning import ContinuousOptimalBinning
 
-output_file = snakemake.output[0]
-odir = os.path.dirname(output_file)
+odir = "output/beige_vs_white/bvw_fastmnn"
 subset_data = True
 import random 
 random.seed(10)
-#odir = "output/beige_vs_white/bvw_fastmnn"
 
-path = re.split(r"[/.]",odir)
-if path[0] in ["projects","home"]:
-    wdir = path.index("output")
-    module = path(wdir+1)
-    dataname = path(wdir+2)
-elif len(path) == 3:
-    module = path[1]
-    dataname = path[2]
-else: 
-    print("cannot determine module and dataname from filepath")
-fig_path = os.path.join("analysis", module, "figures", dataname +"_g2g")
+fig_path = os.path.join("analysis/beige_vs_white/figures/bvw_fastmnn_g2g")
 os.makedirs(fig_path, exist_ok=True)
 
 pal = {'day0':"#B3B3B3", 'day1':"#85C2EA", 'day3':"#1F78B4"}
