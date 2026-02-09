@@ -1,5 +1,5 @@
 ---
-title: "fastMNN velociraptor dynamical_pairedend"
+title: "fastMNN velociraptor dynamical BOTH beige & white"
 author: "Sarah Hazell Pickering"
 date: "2024-08-28"
 output: html_document
@@ -71,6 +71,7 @@ if (subset_data){
   DefaultAssay(sbs) = "RNA"
 }
 sbs
+sbs = FindVariableFeatures(sbs)
 variable.genes = VariableFeatures(sbs)
 ```
 

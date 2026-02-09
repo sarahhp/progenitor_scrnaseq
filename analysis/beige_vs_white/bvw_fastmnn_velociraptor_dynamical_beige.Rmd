@@ -1,5 +1,5 @@
 ---
-title: "fastMNN velociraptor dynamical_pairedend"
+title: "fastMNN velociraptor dynamical_beige"
 author: "Sarah Hazell Pickering"
 date: "2024-08-28"
 output: html_document
@@ -73,6 +73,7 @@ if (subset_data){
 sbs
 Idents(sbs) = "cond.time"
 sbs = subset(sbs, idents = c("asc.day0","beige.day1","beige.day3"))
+sbs = FindVariableFeatures(sbs)
 Idents(sbs) = "seurat_clusters"
 variable.genes = VariableFeatures(sbs)
 ```
