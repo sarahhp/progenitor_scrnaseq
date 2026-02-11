@@ -70,6 +70,7 @@ if (subset_data){
   DefaultAssay(sbs) = "RNA"
 }
 sbs = JoinLayers(sbs)
+sbs = FindVariableFeatures(sbs)
 
 #save memory by removing unnecessary information
 sbs@assays$mnn.reconstructed = NULL  

@@ -117,25 +117,20 @@ df = aligner.get_stat_df() # ordered genes according to alignment similarity sta
 print(df.head())
 
 diff_genes = df.iloc[0:10,0].tolist()
-# for gene in diff_genes:
-#     print("investigating" ,gene)
-#     VisualUtils.show_gene_alignment(gene, aligner, adata_ref, adata_query, "initial_clusters", clusters)
-#     plt.savefig("{}/{}_alignment_bins.png".format(fig_path, gene), format="png", dpi=300, bbox_inches="tight")
-#     plt.close() 
-#     
-#     VisualUtils.plotTimeSeries(gene, aligner, plot_cells=True, colr=bvw)
-#     plt.savefig("{}/{}_alignment.png".format(fig_path, gene), format="png", dpi=300, bbox_inches="tight")
-#     plt.close() 
 
 import pickle
 if subset_data:
     with open(odir + '/10%_g2g_aligner.pkl', 'wb') as file:
         pickle.dump(aligner, file)
     df.to_csv(odir + "/10%_g2g_alignment_genes.tsv", sep='\t', index=False)
+    adata_ref.obs['bin_ids'].to_csv(os.path.join(odir, "10%_g2g_white_bin_ids.tsv"), sep='\t')
+    adata_query.obs['bin_ids'].to_csv(os.path.join(odir, "10%_g2g_beige_bin_ids.tsv"), sep='\t')
 elif not subset_data:
     with open(odir + '/g2g_aligner.pkl', 'wb') as file:
         pickle.dump(aligner, file)
     df.to_csv(odir + "/g2g_alignment_genes.tsv", sep='\t', index=False)
+    adata_ref.obs['bin_ids'].to_csv(os.path.join(odir, "g2g_white_bin_ids.tsv"), sep='\t')
+    adata_query.obs['bin_ids'].to_csv(os.path.join(odir, "g2g_beige_bin_ids.tsv"), sep='\t')
 
 
 

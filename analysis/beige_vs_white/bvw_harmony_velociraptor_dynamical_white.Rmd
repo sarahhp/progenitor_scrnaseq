@@ -1,0 +1,455 @@
+---
+title: "harmony velociraptor dynamical_white"
+author: "Sarah Hazell Pickering"
+date: "2024-08-28"
+output: html_document
+---
+
+Running with the read2only UMAPs, but the unspliced/spliced counts from the paired end mode (called count_no_introns). 
+
+```{r libs, warning=F, message=F, echo=F}
+library(dplyr)
+library(ggplot2)
+library(Seurat)
+library(BPCells)
+library(LoomExperiment)
+library(RColorBrewer)
+library(velociraptor)
+library(SingleCellExperiment)
+library(scater) #for tsne/umaps
+library(here)
+```
+
+## setup
+```{r params}
+module = "beige_vs_white"
+method_name = "harmony"
+model = "dynamical" #stochastic (fast) or dynamical (accurate)
+dataname = paste0("bvw_",method_name)
+red_name = paste("PCA", sep=".", toupper(method_name))
+load_data = T #loading data
+subset_data = T
+
+rmd_filename = paste0("bvw_",method_name,"_velociraptor_", model, "_white")
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+uns_dir = here("data/cellranger/count_no_introns")
+indir = here("output", module, "bvw_integration_trial")
+```
+
+```{r setup}
+set.seed(8)
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+prog_cols = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00","#AC8AD0")
+pal = c("#B3B3B3", "#85C2EA","#1F78B4")
+clusters = clusters = MetBrewer::met.brewer("Redon", 12)
+names(clusters) = 0:11
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+## Load Seurat object
+```{r load_seurat}
+if (subset_data){
+  sbs = readRDS(here(indir, "10%_complete_analysis.rds"))
+  Idents(sbs) = "seurat_clusters"
+} else {
+  sbs = readRDS(here(indir,"complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+sbs
+sbs = JoinLayers(sbs)
+
+#save memory by removing unnecessary information
+sbs@assays$mnn.reconstructed = NULL  
+for (n in names(sbs@reductions)){
+    if ( grepl("rpca|fastmnn", n)){
+        sbs[[n]] = NULL
+    }
+}
+sbs
+table(sbs$cond.time)
+```
+
+
+```{r}
+sbs[["umap"]] = sbs[["umap.harmony"]]
+sbs[["tsne"]] = sbs[["tsne.harmony"]]
+```
+
+### subset to white only
+```{r}
+Idents(sbs) = "cond.time"
+sbs = subset(sbs, idents = c("asc.day0","white.day1","white.day3"))
+Idents(sbs) = "seurat_clusters"
+all_var = VariableFeatures(sbs)
+sbs = FindVariableFeatures(sbs)
+variable.genes = VariableFeatures(sbs)
+```
+
+
+```{r}
+summary(variable.genes %in% all_var)
+tail(all_var[!all_var %in% variable.genes])
+```
+
+
+```{r}
+DimPlot(sbs, cols=clusters, reduction="umap")
+DimPlot(sbs, cols=clusters, reduction="tsne")
+```
+
+### Convert to SingleCell Experiment
+
+```{r sce_conversion, warning=FALSE}
+sce = as.SingleCellExperiment(sbs, assay="RNA")
+sce
+```
+
+```{r}
+rowData(sce)
+head(rownames(sce))
+colData(sce)[1:7]
+```
+
+
+```{r}
+rm(sbs)
+```
+
+## Load our unspliced data
+
+```{r load_uns}
+samples = c(here(uns_dir, "white",c("white_day1","white_day1_rep2","white_day3")),
+          here(uns_dir,"day0","day0_subjectS6")#,
+         # here(uns_dir, "beige",c("beige_day1","beige_day1_rep2","beige_day3"))
+         )
+sample_sfx = gsub(".*/", "", samples)
+
+data_list = c()
+for (i in 1:length(samples)){
+  print(samples[i])
+  loom = import(here(samples[i], "velocyto", paste0(sample_sfx [i],".loom")), 
+                type="SingleCellLoomExperiment")
+  cell_id = paste0(gsub("_",".",sample_sfx[i]),"_")
+  colnames(loom) = gsub(".*:",cell_id, gsub("x$","-1",colData(loom)$CellID))
+  rownames(loom) = rowData(loom)$Gene
+  rownames(loom)[duplicated(rownames(loom))] = paste0(rownames(loom)[duplicated(rownames(loom))], ".1")
+  data_list = c(data_list,loom)
+}
+summary(data_list)
+
+loom = do.call(cbind, data_list)
+loom
+```
+
+
+```{r}
+rowData(loom)
+colData(loom)
+assays(loom)[["unspliced"]]
+loom$sample = gsub("_.*","", colnames(loom))
+table(loom$sample)
+```
+
+
+### Combine objects
+the handling of duplicate gene names is different between the two methods.  The loom stores more gene information, so it doesn't matter about the duplicates.  seurat though doesn't load the  extra gene information
+
+```{r}
+summary(rownames(sce) %in% rownames(loom))
+summary(colnames(sce) %in% colnames(loom))
+head(colnames(sce)[!colnames(sce) %in% colnames(loom)] )
+
+# one cell missing because cellranger filtering
+ncol(sce)
+colnames(loom) = gsub("day0.subjectS6", "asc.day0", colnames(loom))
+sce = sce[,colnames(sce) %in% colnames(loom)]
+ncol(sce)
+
+
+# filter cells from seurat analysis
+filt = loom[rownames(sce),colnames(sce)]
+
+assays(sce)[["unspliced"]] = assays(filt)[["unspliced"]]
+assays(sce)[["spliced"]] = assays(filt)[["spliced"]]
+sce
+table(sce$sample)
+```
+
+
+## Get some stats on the unspliced counts
+Sum = total counts and 
+detected = the number of detected features
+calculating for the unspliced 
+
+```{r}
+sce <- addPerCellQC(sce, 
+    subsets=list(Mito=grep("MT-", rownames(sce))),
+    assay.type = "unspliced")
+colData(sce)
+plotColData(sce, y = "sum", x="detected", color_by="seurat_clusters", other_fields = "sample") + facet_wrap(~sample) 
+singleCellTK::plotSCEViolin(sce, "colData", "sum", groupBy = "sample")
+singleCellTK::plotSCEViolin(sce, "colData", "detected", groupBy = "sample")
+```
+
+Okay interesting, the number of detected features drops for BOTH day1_rep2 and day3, even though day3 has been quantified in paired-end mode.  
+
+
+## Filter low expr genes
+
+```{r find_filter}
+nonzeroes = (assay(sce, "spliced") > 0 )* (assay(sce, "unspliced") > 0)
+head(nonzeroes)
+
+shared_counts = assay(sce, "spliced")*nonzeroes + assay(sce, "unspliced")*nonzeroes 
+head(shared_counts)
+
+genes_to_keep = rowSums(shared_counts) > 20
+summary(genes_to_keep)
+```
+
+```{r}
+filt = sce[genes_to_keep,]
+filt
+
+summary(variable.genes %in% rownames(filt))
+variable.genes = variable.genes[variable.genes %in% rownames(filt)]
+reducedDimNames(sce)
+```
+
+## Starting velocity analysis
+
+Supplying variable genes and previously computed Integration reduction (acts as a PCA)
+
+
+```{r running_scvelo}
+velo.out = scvelo(sce, subset.row = variable.genes, use.dimred=red_name,
+                  assay.X="counts", mode= model)
+```
+
+```{r}
+velo.out
+sce$velocity_pseudotime = velo.out$velocity_pseudotime
+```
+
+## pseuodtime
+```{r}
+plotTSNE(sce, color_by="velocity_pseudotime")
+plotUMAP(sce, color_by="velocity_pseudotime")
+```
+
+## Arrows on PCA
+
+```{r}
+embedded_pca <- embedVelocity(reducedDim(sce, red_name), velo.out)
+dim(embedded_pca)
+```
+
+
+```{r}
+reducedDim(sce, "PCA.SIMPLE") = reducedDim(sce, red_name)[,1:2]
+grid.df <- gridVectors(sce, embedded_pca[,1:2], use.dimred = "PCA.SIMPLE")
+colnames(grid.df) = gsub("harmony", "PC", colnames(grid.df))
+head(grid.df)
+dim(grid.df)
+plotReducedDim(sce, red_name,colour_by="initial_clusters") +
+    geom_segment(data=grid.df, mapping=aes(x=start.PC_1, y=start.PC_2, 
+        xend=end.PC_1, yend=end.PC_2, colour=NULL), alpha=0.5,arrow=arrow(length=unit(0.05, "inches"))) &
+  scale_colour_manual(values=clusters)
+
+plotReducedDim(sce, red_name,colour_by="time") +
+    geom_segment(data=grid.df, mapping=aes(x=start.PC_1, y=start.PC_2, 
+        xend=end.PC_1, yend=end.PC_2, colour=NULL), alpha=0.5,arrow=arrow(length=unit(0.05, "inches"))) &
+  scale_colour_manual(values=pal)
+```
+## Arrows on UMAP
+
+```{r} 
+embedded <- embedVelocity(reducedDim(sce, "UMAP"), velo.out)
+dim(embedded)
+grid.df <- gridVectors(sce, embedded, use.dimred = "UMAP", resolution=40)
+head(grid.df)
+dim(grid.df)
+if (subset_data){pt_size=1} else{pt_size=0.2}
+
+plotReducedDim(sce, "UMAP",colour_by="initial_clusters", point_size=pt_size) +
+    geom_segment(data=grid.df, mapping=aes(x=start.umap_1, y=start.umap_2, 
+        xend=end.umap_1, yend=end.umap_2, colour=NULL), width=1,arrow=arrow(length=unit(0.05, "inches"))) +
+  scale_colour_manual(values=clusters)
+
+plotReducedDim(sce, "UMAP",colour_by="time", point_size=pt_size) +
+    geom_segment(data=grid.df, mapping=aes(x=start.umap_1, y=start.umap_2, 
+        xend=end.umap_1, yend=end.umap_2, colour=NULL), width=1,arrow=arrow(length=unit(0.05, "inches"))) +
+  scale_colour_manual(values=pal)
+```
+
+
+
+## Arrows on tsne
+
+```{r velocity_tsne_clusters} 
+embedded <- embedVelocity(reducedDim(sce, "TSNE"), velo.out)
+dim(embedded)
+grid.df <- gridVectors(sce, embedded, use.dimred = "TSNE", resolution=40)
+head(grid.df)
+dim(grid.df)
+if (subset_data){pt_size=1} else{pt_size=0.2}
+
+plotReducedDim(sce, "TSNE",colour_by="initial_clusters", point_size=pt_size) +
+    geom_segment(data=grid.df, mapping=aes(x=start.tsne_1, y=start.tsne_2, 
+        xend=end.tsne_1, yend=end.tsne_2, colour=NULL), width=1,arrow=arrow(length=unit(0.05, "inches"))) +
+  scale_colour_manual(values=clusters)
+```
+
+
+```{r velocity_tsne_time} 
+plotReducedDim(sce,"TSNE",colour_by="time", point_size=pt_size) +
+    geom_segment(data=grid.df, mapping=aes(x=start.tsne_1, y=start.tsne_2, 
+        xend=end.tsne_1, yend=end.tsne_2, colour=NULL), width=1,arrow=arrow(length=unit(0.05, "inches"))) +
+  scale_colour_manual(values=pal)
+```
+
+### Add progenitor clusters 
+
+
+```{r}
+pro_clusters = "/projects/imb-pkbphil/sp/sc_rnaseq/upr_in_adipo/output/progenitors/integration_trial_res0.3"
+if (subset_data){
+  filt = readRDS(here(pro_clusters, "10%_complete_analysis.rds"))
+} else{
+  filt = readRDS(here(pro_clusters, "complete_analysis.rds"))
+}
+filt
+table(filt$rpca_clusters)
+head(filt$rpca_clusters)
+tail(filt$rpca_clusters)
+```
+
+
+```{r}
+pro_clusters = filt$rpca_clusters
+names(pro_clusters) = gsub("day0.subjectS6","asc.day0",names(pro_clusters))
+head(pro_clusters[colnames(sce)])
+sce$progen_clusters = pro_clusters[colnames(sce)]
+table(sce$progen_clusters, useNA="ifany")
+```
+
+
+```{r}
+sce$if_progen_cluster = paste0("w",sce$initial_clusters)
+sce$if_progen_cluster[!is.na(sce$progen_clusters)] = paste0("p",sce$progen_clusters[!is.na(sce$progen_clusters)])
+table(sce$if_progen_cluster, useNA="ifany")
+```
+
+```{r}
+sce$time.progen_clusters = sce$time
+sce$time.progen_clusters[!is.na(sce$progen_clusters)] = paste0("p",sce$progen_clusters[!is.na(sce$progen_clusters)])
+table(sce$time.progen_clusters)
+rm(filt)
+```
+
+```{r velcocity_tsne_prog_clusters}
+plotReducedDim(sce, "TSNE",colour_by="time.progen_clusters", point_size=pt_size) +
+    geom_segment(data=grid.df, mapping=aes(x=start.tsne_1, y=start.tsne_2, 
+        xend=end.tsne_1, yend=end.tsne_2, colour=NULL), width=1,arrow=arrow(length=unit(0.05, "inches"))) +
+  scale_colour_manual(values=c(prog_cols, pal))
+
+plotReducedDim(sce, "TSNE",colour_by="if_progen_cluster", point_size=pt_size) +
+    geom_segment(data=grid.df, mapping=aes(x=start.tsne_1, y=start.tsne_2, 
+        xend=end.tsne_1, yend=end.tsne_2, colour=NULL), width=1,arrow=arrow(length=unit(0.05, "inches"))) +
+  scale_colour_manual(values=c(prog_cols,clusters))
+```
+
+
+
+## poking around the output object
+
+```{r}
+colnames(colData(velo.out))
+names(rowData(velo.out))
+```
+
+I see a column here named root_cells.  How does scvelo select root cells?  
+velocity confidence, cool, but confidence_transition?  
+
+Then we have stuff calculated per gene; like alpha, beta & gamma; fit_steady, fit_likelihood
+
+```{r}
+summary(velo.out$root_cells)
+summary(velo.out$end_points)
+```
+
+```{r}
+str(metadata(velo.out))
+```
+
+
+
+## Velocity confidence and length
+confidence = coherence of velocity directions  
+length = speed of transcription between cells = roughly arrow length
+
+```{r}
+sce$velocity_confidence = velo.out$velocity_confidence
+sce$velocity_length = velo.out$velocity_length
+plotReducedDim(sce, "TSNE",color_by="velocity_confidence", )
+
+plotReducedDim(sce, red_name,color_by="velocity_confidence", )
+
+plotReducedDim(sce, "TSNE",color_by="velocity_length" )
+```
+
+## Velocity stream plots
+
+```{r}
+colnames(reducedDim(sce, "TSNE")) 
+str(embedded)
+```
+
+
+```{r}
+colnames(reducedDim(sce, "TSNE")) = c("V1","V2")
+str(embedded)
+
+plotVelocityStream(sce, embedded, use.dimred="TSNE", 
+                   color_by = "initial_clusters",grid.resolution=20,
+                   stream.L = 10,
+                   arrow.angle = 10, arrow.length = 0.5)
+
+plotVelocityStream(sce, embedded, use.dimred="TSNE", 
+                   color_by = "initial_clusters",grid.resolution=30,
+                   stream.L = 8,
+                   arrow.angle = 15, arrow.length = 0.5)
+
+plotVelocityStream(sce, embedded, use.dimred="TSNE", 
+                   color_by = "initial_clusters",grid.resolution=40,
+                   stream.L = 5,
+                   arrow.angle = 15, arrow.length = 0.5)
+```
+## Save
+
+```{r}
+if (subset_data == F){
+  saveRDS(sce, file = here(odir, paste0(model, "_velocity_scexperiment_white.rds")))
+  saveRDS(velo.out, file = here(odir,paste0(model, "_velocity_output_white.rds")))
+  
+} else if (subset_data){
+  saveRDS(sce, file = here(odir, paste0("10%_subset_", model, "_velocity_scexperiment_white.rds")))
+  saveRDS(velo.out, file = here(odir, paste0("10%_subset_", model, "_velocity_output_white.rds")))
+}
+```
+

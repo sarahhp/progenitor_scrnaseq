@@ -24,7 +24,7 @@ library(patchwork)
 module = "adipogenesis"
 dataname = "white_only_downsample"
 load_data = T
-subset_data = T
+subset_data = F
 
 rmd_filename = "white_only_downsample"
 i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))

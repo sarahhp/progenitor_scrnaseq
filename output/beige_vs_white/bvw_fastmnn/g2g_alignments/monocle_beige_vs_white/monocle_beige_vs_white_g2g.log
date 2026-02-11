@@ -1,0 +1,26 @@
+2237 genes such as:
+['SAMD11', 'HES4', 'VWA1', 'MMP23B', 'MEGF6', 'PER3', 'ERRFI1', 'SLC2A5', 'ANGPTL7', 'NPPB']
+14
+13
+Using bins 13
+===============================================================================================================
+Genes2Genes (v0.2.0)
+Dynamic programming alignment of gene pseudotime trajectories using a bayesian information-theoretic framework
+===============================================================================================================
+Interpolator initialization completed
+Aligner initialised to align trajectories of 20821 reference cells & 20821 query cells in terms of 2237 genes
+Running gene-level alignment: 🧬
+Alignment completed! ✅
+Average Alignment:  [92mMMMMMMMMMMMMM[0m (cell-level)
+% similarity: 100.0
+None
+Mean alignment similarity percentage (matched %): 
+96.67 %
+            Gene alignment_similarity_percentage  ... color  abs_l2fc
+375       UGT1A7                             0.3  ...   red  0.908514
+1417     SLC6A13                             0.3  ...   red  0.540715
+572      SPARCL1                          0.3684  ...   red  0.183447
+1647  AC100756.4                          0.4444  ...   red  0.194579
+1672     CYP19A1                          0.4444  ...   red  0.171844
+
+[5 rows x 6 columns]

@@ -6,6 +6,17 @@ output: html_document
 ---
 
 # Figure 6
+
+New figure 6 plan
+A & B Large bvw cluster monocle trajectory and RNA velocity with arrows
+C Alignment match between beige and white pseudotimes -> show 3 genes for each step of the trajectory
+    1-> add velocity_pseudotime and prog cols to bvw_fastmnn/complete_analysis.rds 
+    2-> save as _seurat.rds file (snakemake will convert to h5ad)
+    3-> add velocity_column param to the g2g alignment rule & script.  When we set of pseudotime column for g2g, which has to be called "time", we'll use this velocity column param, rather than using "monocle_pseudotime" (which is hard-coded atm)
+D Violin plot, split by bvw cluster, with paired white and beige?
+    -> use output of 1 above :) 
+E Violin plot with progenitor colours
+
 ## Setup
 
 ```{r libs, message=FALSE, warning=FALSE}

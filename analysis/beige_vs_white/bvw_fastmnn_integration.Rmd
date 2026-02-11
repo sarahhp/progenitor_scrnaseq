@@ -108,6 +108,15 @@ sbs = IntegrateLayers(sbs, method= FastMNNIntegration, orig.reduction = "pca",
 ```
 
 ```{r}
+sbs
+prev_genes = VariableFeatures(sbs)
+sbs = JoinLayers(sbs)
+sbs = FindVariableFeatures(sbs)
+summary(prev_genes %in% VariableFeatures(sbs))
+```
+
+
+```{r}
 sbs <- FindNeighbors(sbs, reduction =  red_name, dims = 1:30, verbose=F)
 sbs <- FindClusters(sbs, resolution = 0.5, cluster.name =  clu_name)
 sbs <- RunUMAP(sbs, reduction = red_name, dims = 1:20, spread=1.3, reduction.name = umap_name)
@@ -198,7 +207,6 @@ Min.pct sets the minimum percentage of cells for a marker to be found in
 
 Does densify, which increases speed at the cost of memory help?  
 ```{r densify}
-sbs = JoinLayers(sbs)
 norm.markers = FindAllMarkers(sbs, only.pos = T, min.pct=0.25, 
                               logfc.threshold = 0.5, densify=T)
 norm.markers = arrange(norm.markers, p_val_adj, avg_log2FC)

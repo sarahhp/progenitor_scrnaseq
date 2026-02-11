@@ -360,7 +360,7 @@ rule emont:
         rdata = ODIR + "/complete_analysis.rds",
         rmd = ADIR + "/white_only_downsample_emont.Rmd"
     output:
-        annot = ODIR + "/emont/complete_analysis_emont.rds",
+        annot = ODIR + "/emont/complete_analysis.emont.rds",
         report = ADIR + "/white_only_downsample_emont.html"
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
@@ -766,8 +766,8 @@ rule tss_monocle_plots:
         rmd = ADIR + "/tss_fastmnn_monocle_umap_plots.Rmd"
     output: 
         pseudotime = ODIR + "/monocle_pseudotime.tsv",
-        seurat_white = ODIR + "white_monocle_pseudotime_seurat.rds",
-        seurat_beige = ODIR + "beige_monocle_pseudotime_seurat.rds",
+        seurat_white = ODIR + "/white_monocle_pseudotime_seurat.rds",
+        seurat_beige = ODIR + "/beige_monocle_pseudotime_seurat.rds",
         report = ADIR + "/tss_fastmnn_monocle_umap_plots.html",
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
@@ -784,8 +784,8 @@ use rule tss_monocle_plots as bvw_monocle_plots with:
         rmd = ADIR + "/bvw_fastmnn_monocle_umap_plots.Rmd"
     output: 
         pseudotime = BVW_DIR + "/monocle_pseudotime.tsv",
-        seurat_white = BVW_DIR + "white_monocle_pseudotime_seurat.rds",
-        seurat_beige = BVW_DIR + "beige_monocle_pseudotime_seurat.rds",
+        seurat_white = BVW_DIR + "/white_monocle_pseudotime_seurat.rds",
+        seurat_beige = BVW_DIR + "/beige_monocle_pseudotime_seurat.rds",
         report = ADIR + "/bvw_fastmnn_monocle_umap_plots.html",
         
 #include: "run_g2g.py"    
@@ -808,7 +808,7 @@ rule figure6:
 SUPP_FIGS = [
      #"figures/supp_figS1_progenitors_unintegrated.html",
      "figures/supp_figS2_progenitor_integration_trial.html",
-     "figures/supp_figS3_4_progenitors.html",
+     "figures/supp_figS3_S4_progenitors.html",
     # "figures/supp_figS6_beige_vs_white-gene_level.html",
      
      "figures/supp_figS10_tss_integration_trial.html",

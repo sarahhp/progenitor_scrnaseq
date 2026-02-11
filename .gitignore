@@ -13,7 +13,8 @@ output/*/*/*.rds
 *.rds
 *.h5ad
 .snakemake
-logs
+logs/*
+!logs/*.svg
 screenlog*
 analysis/*/figures/*/*.pdf
 analysis/*.pdf
