@@ -7,15 +7,15 @@ output: html_document
 
 # Figure 6
 
-New figure 6 plan
-A & B Large bvw cluster monocle trajectory and RNA velocity with arrows
-C Alignment match between beige and white pseudotimes -> show 3 genes for each step of the trajectory
-    1-> add velocity_pseudotime and prog cols to bvw_fastmnn/complete_analysis.rds 
-    2-> save as _seurat.rds file (snakemake will convert to h5ad)
-    3-> add velocity_column param to the g2g alignment rule & script.  When we set of pseudotime column for g2g, which has to be called "time", we'll use this velocity column param, rather than using "monocle_pseudotime" (which is hard-coded atm)
-D Violin plot, split by bvw cluster, with paired white and beige?
-    -> use output of 1 above :) 
-E Violin plot with progenitor colours
+    a. Violin plot of monocle3 pseudotime calculated for separate beige and white trajectories, separated by common clusters (see also Supp S7). 
+    b. Alignment of beige vs white scRNAseq trajectories on key genes (method: g2g alignment on monocle3 pseuodtime)]
+    c. Monocle trajectory with prog cols - white and beige trajectory overlayed
+    d. RNA velocity arrows with prog cols - total analysis. 
+    e. Violin prog colours beige vs white monocle/ RNA velocity / harmony (RNA velocity)
+    f. TSS prog colours
+    g. Supp - Harmony map with prog colours. 
+
+
 
 ## Setup
 
@@ -55,12 +55,133 @@ theme_hp = theme_classic(base_size = 15) +
         strip.background = element_blank())
 theme_set(theme_hp)
 pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486", "#E31A1C")
+names(pal) =  c("white.day3","white.day1","day0", "beige.day1","beige.day3")
 prog_cols = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00")
 prog_levels = c("p5","p4","p6","p3","p0","p1","p2")
 names(prog_cols) = paste0("p", 0:(length(prog_levels)-1))
 ps_cols = c(prog_cols, pal[2:1])
 names(ps_cols) = c(names(prog_cols),"day1","day3")
 ```
+
+
+# Beige vs white
+
+```{r bvw_setup}
+module = "beige_vs_white"
+dataname="bvw_fastmnn"
+odir = here("output", module, dataname)
+clusters =  MetBrewer::met.brewer("Redon", 12)
+cluster_levels = as.character(c(8,3,11,9,6,0,7,10,1,2,5,4))
+```
+
+## Read seurat objects 
+```{r}
+sbs_white= readRDS(here(odir, "white_combined_pseudotime_seurat.rds"))
+sbs_beige=   readRDS(here(odir, "beige_combined_pseudotime_seurat.rds"))
+merged_obj <- merge(x = sbs_white, y = sbs_beige, add.cell.ids = c("white","beige"), merge.dr = F)
+merged_obj
+merged_obj$progen_clusters = factor(merged_obj$progen_clusters, levels=c(paste0("p",0:7),paste0("day",c(0,1,3))))
+head(merged_obj@meta.data)
+
+meta = read.delim( here(odir,"combined_pseudotime.tsv"))
+meta$initial_clusters = factor(meta$initial_clusters, levels=cluster_levels)
+meta$sample_or_progen_cluster = factor(meta$sample_or_progen_cluster, 
+                                       levels=c(prog_levels, c("day0","white.day1", "beige.day1","white.day3","beige.day3")))
+head(meta)
+```
+
+### read monocle object
+```{r}
+monoclew = readRDS(here(odir,"white_monocle_complete_analysis_umap.rds"))
+monoclew$progen_clusters = paste0("p", monoclew$progen_clusters)
+table(monoclew$time.progen_clusters)
+
+monocleb = readRDS(here(odir,"beige_monocle_complete_analysis_umap.rds"))
+monocleb$progen_clusters = paste0("p", monocleb$progen_clusters)
+table(monocleb$time.progen_clusters)
+```
+
+## A: Violin Plots
+
+```{r Apaired_ridge_plot}
+VlnPlot(merged_obj, features = "monocle_pseudotime", group.by = "initial_clusters", split.by="pscondition",
+        cols= c("#FF7F00",  "#1F78B4"), pt.size = 0, split.plot = T) + coord_flip(expand=F) +
+  scale_x_discrete(limits = rev(cluster_levels) )+
+  labs(x="Time // Progenitor cluster", y="Monocle pseudotime", title=NULL) + guides(fill=guide_legend(reverse=T)) +
+    theme_hp
+```
+
+
+```{r}
+ggplot(meta, 
+       aes(x=monocle_pseudotime, y=initial_clusters, fill=initial_clusters)) + 
+    geom_violin(scale="width", position="dodge")+
+  facet_grid(pscondition~.) + scale_fill_manual(values=clusters, name="Bvw clusters", labels = function(x)paste0("b",x)) +  
+    coord_cartesian(expand=F) + scale_y_discrete(labels = function(x)paste0("b",x),limits=rev(cluster_levels)) +
+    labs(y="Bvw clusters", x="Monocle pseudotime", title=NULL)
+```
+
+### Progenitor colours
+```{r paired_ridge_plot}
+VlnPlot(merged_obj, features = "monocle_pseudotime", group.by = "time.progen_clusters", split.by="pscondition",
+        cols= c("#FF7F00",  "#1F78B4"), pt.size = 0, split.plot = T) + coord_flip(expand=F) +
+  scale_x_discrete(limits = rev(c(prog_levels, paste0("day",c(1,3))))) +
+  labs(x="Time // Progenitor cluster", y="Monocle pseudotime", title=NULL) + guides(fill=guide_legend(reverse=T)) +
+    theme_hp
+```
+
+
+```{r}
+ps_cols = c(prog_cols, pal[1:2])
+names(ps_cols) = c(names(prog_cols), "day1","day3")
+ggplot(filter(meta, sample_or_progen_cluster != "day0"), 
+       aes(x=monocle_pseudotime, y=time.progen_clusters, fill=time.progen_clusters)) + 
+    geom_violin(scale="width")+
+  facet_grid(pscondition~.) + scale_fill_manual(values=ps_cols, name="identity", limits = names(ps_cols)) + 
+  scale_y_discrete(limits=c(paste0("day",c(3,1)), rev(prog_levels))) + coord_cartesian(expand=F) +
+    labs(y="Time // Progenitor cluster", x="Monocle pseudotime", title=NULL)
+```
+
+## B: g2g Alignment
+
+![day0]()
+
+## D: UMAPs
+
+```{r}
+p=plot_cells(monoclew, color_cells_by = "time.progen_clusters", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.75,  alpha = 0.5,
+             graph_label_size = 5)+ theme_hp +
+    scale_colour_manual(values=ps_cols, name="Progenitor\ncluster\nor time", limits = c(names(prog_cols), "day1", "day3"))  +
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size=5)))
+p$layers[[1]]$aes_params$colour = 'transparent' 
+p
+```
+
+```{r}
+p=plot_cells(monocleb, color_cells_by = "time.progen_clusters", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.75,  alpha = 0.5,
+             graph_label_size = 5)+ theme_hp +
+    scale_colour_manual(values=ps_cols, name="Progenitor\ncluster\nor time", limits = c(names(prog_cols), "day1", "day3"))  +
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size=5)))
+p$layers[[1]]$aes_params$colour = 'transparent' 
+p
+```
+
+## Play with denisty maps
+
+```{r}
+bvwmeta = read.delim(here(odir, "monocle_pseudotime.tsv"))
+head(bvwmeta)
+
+ggplot(bvwmeta, aes(x=monocle_pseudotime, fill=pscondition)) + geom_density(alpha=0.5)
+ggplot(bvwmeta, aes(x=monocle_pseudotime, fill=cond.time)) + geom_density(alpha=0.5) +
+    scale_fill_manual(values=pal)
+
+ggplot(bvwmeta, aes(x=monocle_pseudotime, fill=time)) + geom_density(alpha=0.5) +
+    scale_fill_manual(values=pal[c(3,2,1)])
+```
+
 
 ## TSS level trajectories
 ```{r tss_setup}
@@ -174,64 +295,6 @@ ggplot(meta, aes(x=monocle_pseudotime, fill=cond.time)) + geom_density(alpha=0.5
 
 ```
 
-
-
-# Beige vs white
-
-```{r bvw_setup}
-module = "beige_vs_white"
-dataname="bvw_fastmnn"
-odir = here("output", module, dataname)
-clusters =  MetBrewer::met.brewer("Redon", 12)
-```
-
-### read monocle
-```{r}
-monoclew = readRDS(here(odir,"white_monocle_complete_analysis_umap.rds"))
-monoclew$progen_clusters = paste0("p", monoclew$progen_clusters)
-table(monoclew$time.progen_clusters)
-
-monocleb = readRDS(here(odir,"beige_monocle_complete_analysis_umap.rds"))
-monocleb$progen_clusters = paste0("p", monocleb$progen_clusters)
-table(monocleb$time.progen_clusters)
-```
-
-
-## D: UMAPs
-
-```{r}
-p=plot_cells(monoclew, color_cells_by = "time.progen_clusters", label_leaves = F, label_branch_points = F, 
-                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.75,  alpha = 0.5,
-             graph_label_size = 5)+ theme_hp +
-    scale_colour_manual(values=ps_cols, name="Progenitor\ncluster\nor time", limits = c(names(prog_cols), "day1", "day3"))  +
-    guides(colour = guide_legend(override.aes = list(alpha = 1, size=5)))
-p$layers[[1]]$aes_params$colour = 'transparent' 
-p
-```
-
-```{r}
-p=plot_cells(monocleb, color_cells_by = "time.progen_clusters", label_leaves = F, label_branch_points = F, 
-                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.75,  alpha = 0.5,
-             graph_label_size = 5)+ theme_hp +
-    scale_colour_manual(values=ps_cols, name="Progenitor\ncluster\nor time", limits = c(names(prog_cols), "day1", "day3"))  +
-    guides(colour = guide_legend(override.aes = list(alpha = 1, size=5)))
-p$layers[[1]]$aes_params$colour = 'transparent' 
-p
-```
-
-## PLay with denisty maps
-
-```{r}
-bvwmeta = read.delim(here(odir, "monocle_pseudotime.tsv"))
-head(bvwmeta)
-
-ggplot(bvwmeta, aes(x=monocle_pseudotime, fill=pscondition)) + geom_density(alpha=0.5)
-ggplot(bvwmeta, aes(x=monocle_pseudotime, fill=cond.time)) + geom_density(alpha=0.5) +
-    scale_fill_manual(values=pal)
-
-ggplot(bvwmeta, aes(x=monocle_pseudotime, fill=time)) + geom_density(alpha=0.5) +
-    scale_fill_manual(values=pal[c(3,2,1)])
-```
 
 
 

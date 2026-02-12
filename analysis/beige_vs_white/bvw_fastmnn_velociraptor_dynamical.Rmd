@@ -279,7 +279,7 @@ plotReducedDim(sce, "UMAP",colour_by="time", point_size=pt_size) +
 ### Add progenitor clusters
 
 ```{r}
-pro_clusters = "/projects/imb-pkbphil/sp/sc_rnaseq/upr_in_adipo/output/progenitors/integration_trial_res0.3"
+pro_clusters = "output/progenitors/integration_trial"
 if (subset_data){
   filt = readRDS(here(pro_clusters, "10%_complete_analysis.rds"))
 } else{

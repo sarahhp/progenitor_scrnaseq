@@ -45,11 +45,13 @@ theme_hp = theme_classic(base_size = 15) +
         axis.ticks = element_line(linewidth = 0.25),
         strip.background = element_blank())
 theme_set(theme_hp)
+
 pal_white = c("#B3B3B3","#85C2EA","#1F78B4")
 names(pal_white) = c("day0","day1","day3")
 pal_beige = c("#B3B3B3", "#F18486","#E31A1C")
 names(pal_beige) = c("day0","day1","day3")
 pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486","#E31A1C")
+
 prog_cols = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00")
 prog_levels = c("p5","p4","p6","p3","p0","p1","p2")
 names(prog_cols) = paste0("p", 0:(length(prog_levels)-1))
@@ -156,24 +158,81 @@ sbs
 ```
 
 ```{r}
-Idents(sbs) = "sample"
-sbs_white = subset(sbs, idents=c("asc_day0", "white_day1","white_day3"))
-summary(colnames(white) == rownames(sbs_white@meta.data))
-sbs_white$raw_pseudotime = pseudotime(white)
-sbs_white$monocle_pseudotime =   scales::rescale(pseudotime(white), to = c(1, 0)) #rescale from 1 to 0 (cos were tracing backwards from  day3)
-sbs_white$pscondition ="white"
+Idents(sbs) = "cond.time"
+sbs_white = subset(sbs, idents=c("asc.day0", "white.day1","white.day3"))
+colnames_white = colnames(white) == rownames(sbs_white@meta.data)
 
-sbs_beige = subset(sbs, idents=c("asc_day0", "beige_day1","beige_day3"))
-summary(colnames(beige) == rownames(sbs_beige@meta.data))
-sbs_beige$raw_pseudotime = pseudotime(beige)
-sbs_beige$monocle_pseudotime =   scales::rescale(sbs_beige$raw_pseudotime, to = c(1, 0)) #rescale from 1 to 0 (cos were tracing backwards from  day3)
-sbs_beige$pscondition ="beige"
+sbs_beige = subset(sbs, idents=c("asc.day0", "beige.day1","beige.day3"))
+colnames_beige = colnames(beige) == rownames(sbs_beige@meta.data)
+if (!all(c(colnames_white, colnames_beige))){
+    cat("white cell matches:\n")
+    cat(summary(colnames_white))
+    cat("\nbeige cell matches:\n")
+    cat(colnames_beige)
+    stop("Error: Cell ids do not match for monocle and seurat objects")
+} else {
+    sbs_white$raw_pseudotime = pseudotime(white)
+    sbs_white$monocle_pseudotime =   scales::rescale(pseudotime(white), to = c(1, 0)) #rescale from 1 to 0 (cos were tracing backwards from  day3)
+    sbs_white$pscondition ="white"
+    
+    sbs_beige$raw_pseudotime = pseudotime(beige)
+    sbs_beige$monocle_pseudotime =   scales::rescale(sbs_beige$raw_pseudotime, to = c(1, 0)) #rescale from 1 to 0 (cos were tracing backwards from  day3)
+    sbs_beige$pscondition ="beige"
+}
+```
+
+### Rm monocle objects
+
+Already covered by monocle 
+```{r}
+rm(white, beige)
+```
+
+# Velocity pseudotime
+
+```{r}
+if (subset_data){
+  #white = readRDS(here(odir,"10%_dynamical_velocity_scexperiment_white.rds"))
+  #beige = readRDS(here(odir,"10%_dynamical_velocity_scexperiment_beige.rds"))
+    total = readRDS(here(odir,"10%_dynamical_velocity_scexperiment.rds"))
+} else {
+  # white = readRDS(here(odir,"dynamical_velocity_scexperiment_white.rds"))
+  # beige = readRDS(here(odir,"dynamical_velocity_scexperiment_beige.rds"))
+    total = readRDS(here(odir,"dynamical_velocity_scexperiment.rds"))
+}
+# white
+# beige
+total
+```
+
+```{r}
+add_pseudotime = function(seurat, velocity, condition_col="velocity"){
+    pseudotime_vals <- rep(NA, length = length(colnames(seurat)))
+    names(pseudotime_vals) <- colnames(seurat)
+    existing_cells <- intersect(colnames(seurat), colnames(velocity))
+    pseudotime_vals[existing_cells] <- colData(velocity)[existing_cells,'velocity_pseudotime']
+    print(summary(pseudotime_vals))
+    seurat$velocity_pseudotime <- pseudotime_vals
+    seurat$pscondition = condition_col
+    return(seurat)
+}
+
+#sbs_white = add_pseudotime(sbs_white, white, condition_col="white")
+#sbs_beige = add_pseudotime(sbs_beige, beige, condition_col="beige")
+sbs = add_pseudotime(sbs, total)
+summary(is.na(sbs$velocity_pseudotime))
+filt = subset(sbs, cells=WhichCells(sbs, expression=velocity_pseudotime >0))
+filt
 ```
 
 
+```{r tsne_velocity_pseudotime}
+# FeaturePlot(sbs_white, "velocity_pseudotime",pt.size = 0.5)+ scale_colour_viridis(direction=-1)
+# FeaturePlot(sbs_beige, "velocity_pseudotime",pt.size = 0.5)+ scale_colour_viridis(direction=-1)
+FeaturePlot(filt, "velocity_pseudotime",pt.size = 0.5)+ scale_colour_viridis(direction=-1)
+```
 
-
-
+## Merge white and beige objects
 ```{r }
 merged_obj <- merge(x = sbs_white, y = sbs_beige, add.cell.ids = c("white","beige"), merge.dr = F)
 merged_obj
@@ -185,33 +244,14 @@ head(merged_obj@meta.data)
 ## Violin plots
 ```{r paired_ridge_plot}
 VlnPlot(merged_obj, features = "monocle_pseudotime", group.by = "time.progen_clusters", split.by="pscondition",
-        cols= c( "#FF7F00","#1F78B4"), pt.size = 0, split.plot = T) +
-  scale_x_discrete(limits = c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3)))) +
-  ylab("Pseudotime")
-
-
-VlnPlot(merged_obj, features = "raw_pseudotime", group.by = "time.progen_clusters", split.by="pscondition",
-        cols= c( "#FF7F00","#1F78B4"), pt.size = 0, split.plot = T) +
-  scale_x_discrete(limits = c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3)))) +
-  ylab("Pseudotime")
-VlnPlot(merged_obj, features = "monocle_pseudotime", group.by = "time.progen_clusters",split.by="pscondition",
-        cols= c( "#FF7F00","#1F78B4"), pt.size = 0) +
-  scale_x_discrete(limits = c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3)))) +
-  ylab("Pseudotime") 
+        cols= c("#FF7F00",  "#1F78B4"), pt.size = 0, split.plot = T) + coord_flip() +
+  scale_x_discrete(limits = rev(c(prog_levels, paste0("day",c(1,3))))) +
+  labs(x="Progenitor cluster // time", y="Monocle Pseudotime", title=NULL) + guides(fill=guide_legend(reverse=T))
 ```
 
 ```{r}
-VlnPlot(sbs_white, features = "monocle_pseudotime", group.by = "time.progen_clusters", cols=c(prog_cols, pal_white), pt.size = 0) +
-  scale_x_discrete(limits=c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3))))
-RidgePlot(sbs_white, features = "monocle_pseudotime", group.by = "time.progen_clusters", cols=c(prog_cols, pal_white)) +
-  scale_y_discrete(limits=c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3))))
-```
-
-```{r}
-VlnPlot(sbs_beige, features = "monocle_pseudotime", group.by = "time.progen_clusters", cols=c(prog_cols, pal_beige), pt.size = 0) +
-  scale_x_discrete(limits=c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3))))
-RidgePlot(sbs_beige, features = "monocle_pseudotime", group.by = "time.progen_clusters", cols=c(prog_cols, pal_beige)) +
-  scale_y_discrete(limits=c(paste0("p",c(5,6,7,0,3,4,2,1)), paste0("day",c(0,1,3))))
+VlnPlot(filt, features = "velocity_pseudotime", group.by = "time.progen_clusters", cols=c(prog_cols, pal_beige), pt.size = 0) +
+  scale_x_discrete(limits=c(prog_levels, paste0("day",c(1,3))))
 ```
 
 ```{r}
@@ -230,73 +270,19 @@ table(meta$sample_or_progen_cluster)
 ```
 
 
-
-### horizontal pseudotime
-
-```{r}
-ps_cols = c(prog_cols, pal_white[2:3])
-names(ps_cols) = c(names(prog_cols), "day1","day3")
-ggplot(filter(meta, sample_or_progen_cluster != "day0"), 
-       aes(x=monocle_pseudotime, y=time.progen_clusters, fill=time.progen_clusters)) + 
-    geom_violin(scale="width")+
-  facet_grid(pscondition~.) + scale_fill_manual(values=ps_cols, name="identity") + 
-  scale_y_discrete(limits=c(paste0("day",c(3,1)), rev(prog_levels)))
-```
-
-
-
-```{r}
-ggplot(filter(meta, sample_or_progen_cluster != "day0"), 
-       aes(x=monocle_pseudotime, y=time.progen_clusters, fill=sample_or_progen_cluster)) + 
-    geom_violin(scale="width")+
-  facet_grid(pscondition~.) + scale_fill_manual(values=c(prog_cols, pal[c(2,4,1,5)]), name="identity") + 
-  scale_y_discrete(limits=c(paste0("day",c(3,1)), rev(prog_levels)))
-```
-
-
-
-
-
-
-# Velocity pseudotime
-
-```{r}
-if (subset_data){
-  velo = readRDS(here(odir,dataname, method,"10%_dynamical_velocity_scexperiment.rds"))
-} else {
-  velo = readRDS(here(odir,dataname, method,"dynamical_velocity_scexperiment.rds"))
-}
-velo
-```
-
-velocity analysis dropped one cell from day3 somehow which makes matching a bit trickier
-
-```{r}
-pseudotime_vals <- rep(NA, length = length(colnames(sbs)))
-names(pseudotime_vals) <- colnames(sbs)
-existing_cells <- intersect(colnames(sbs), colnames(velo))
-pseudotime_vals[existing_cells] <- colData(velo)[existing_cells,'velocity_pseudotime']
-summary(pseudotime_vals)
-```
-
-
-```{r tsne_velocity_pseudotime}
-sbs$velocity_pseudotime <- pseudotime_vals
-FeaturePlot(sbs, "velocity_pseudotime",reduction = "tsne", pt.size = 0.5)+ scale_colour_viridis(direction=-1)
-```
-
 ## Save
 
 save for g2g_alignment
 ```{r}
 if (subset_data){
-    write.table(meta, file =here(odir,"10%_monocle_pseudotime.tsv"), sep="\t", row.names = F, quote=F)
+    write.table(meta, file =here(odir,"10%_combined_pseudotime.tsv"), sep="\t", row.names = F, quote=F)
     saveRDS(sbs_white, file=here(odir, "10%_white_combined_pseudotime_seurat.rds"))
     saveRDS(sbs_beige, file=here(odir, "10%_beige_combined_pseudotime_seurat.rds"))
 } else if (!subset_data){
-    write.table(meta, here(odir,"monocle_pseudotime.tsv"), sep="\t", row.names = F, quote=F)
+    write.table(meta, here(odir,"combined_pseudotime.tsv"), sep="\t", row.names = F, quote=F)
     saveRDS(sbs_white, file=here(odir, "white_combined_pseudotime_seurat.rds"))
     saveRDS(sbs_beige, file=here(odir, "beige_combined_pseudotime_seurat.rds"))
+    saveRDS(filt, file=here(odir, "combined_pseudotime_seurat.rds"))
 }
 
 ```

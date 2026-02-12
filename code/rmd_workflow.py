@@ -384,7 +384,7 @@ rule emont:
 #         "{params.cmd}" 
         
 
-# use rule render_rmd as lazarescu:
+# use rule render_rmd as lazarescu with:
 #      '''Status: Ran :)     Knitting not possible, just for graphing '''
 #     input:
 #         idx = expand("{dir}/azimuth_reference/{file}",
@@ -576,7 +576,7 @@ rule bvw_fastmnn:
     
 ## Decide to use UMAp or tsNE
 rule bvw_monocle:
-    '''Status:  Knitted'''
+    '''Status:  Complete'''
     input:
         rdata = ODIR + "/complete_analysis.rds",
         rmd = ADIR + "/bvw_fastmnn_monocle_umap.Rmd"
@@ -584,6 +584,37 @@ rule bvw_monocle:
         white = ODIR + "/white_monocle_complete_analysis_umap.rds",
         beige = ODIR + "/beige_monocle_complete_analysis_umap.rds",
         report = ADIR + "/bvw_fastmnn_monocle_umap.html",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}" 
+
+rule bvw_velocity:
+    '''Status:  Knitted'''
+    input:
+        rdata = ODIR + "/complete_analysis.rds",
+        rmd = ADIR + "/bvw_fastmnn_velociraptor_dynamical_{cond}.Rmd"
+    output:
+        velo = ODIR + "/dynamical_velocity_output_{cond}.rds",
+        vdata = ODIR + "/dynamical_velocity_scexperiment_{cond}.rds",
+        report = ADIR + "/bvw_fastmnn_velociraptor_dynamical_{cond}.html",
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}" 
+
+rule combine_pseudotime:
+    input:
+        monocle = expand(ODIR + "/{cond}_monocle_complete_analysis_umap.rds",
+                            cond = ["white","beige"]),
+        vdata= expand(ODIR + "/dynamical_velocity_scexperiment_{cond}.rds",
+                    cond = ["white","beige"]),
+        rmd = ADIR + "/bvw_fastmnn_combine_pseudotime.Rmd"
+    output:
+        txt = ODIR + "/combined_pseudotime.tsv",
+        psdata = expand(ODIR + "/{cond}_combined_pseudotime_seurat.rds",
+                        cond = ["white","beige"]),
+        report = ADIR + "/bvw_fastmnn_combine_pseudotime.Rmd"
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
@@ -798,6 +829,8 @@ rule figure6:
         gwhite = BVW_DIR + "/white_monocle_complete_analysis_umap.rds", #F? or D
         gbeige = BVW_DIR + "/beige_monocle_complete_analysis_umap.rds",
         gpseudotime = BVW_DIR + "/monocle_pseudotime.tsv",
+        psdata = expand(BVW_DIR + "/{cond}_combined_pseudotime_seurat.rds",
+                        cond = ["white","beige"])
     output:
         report = "figures/figure6_early_adipogenic_trajectories.html"
     params:

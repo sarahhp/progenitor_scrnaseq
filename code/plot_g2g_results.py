@@ -34,11 +34,15 @@ with open(odir + '/g2g_aligner.pkl', 'rb') as file:
     
 ## Plot a gene
 genes=[
-    #R1 "PEMT","PLIN1","ICAM1","PM20D1","MGP"
-    #"FABP4","FABP3","FASN","ACLY","LPL","PCK1",
-    #"BRD4","SLC3A2",
-    #"VIM","ACTA2","TAGLN","PHLDA1",
-    "CD36","CXCL8"
+    "PEMT","PLIN1","ICAM1","PM20D1","MGP",
+    "FABP4","FABP3","FASN","ACLY","LPL","PCK1",
+    "BRD4","SLC3A2",
+    "VIM","ACTA2","TAGLN","PHLDA1",
+    "CD36","CXCL8",
+    #diff genes
+    "ENPP5", "ITPKA", "FPR2",
+    "IL23A",   "AGXT" , "GALNT14" , "TSPAN19" , "CA4" , "MMP7",  "SSTR2",   "HIST1H2BI",
+    "DIO2"
     ]
 for gene in genes:
     if gene not in aligner.results_map.keys():
@@ -48,11 +52,6 @@ for gene in genes:
         VisualUtils.plotTimeSeries(gene, aligner, plot_cells=True)
         plt.savefig("{}/{}_alignment.png".format(fig_path, gene), format="png", dpi=300, bbox_inches="tight")
         plt.close() 
-        
-print("Plotting without cells" , gene)
-VisualUtils.plotTimeSeries(gene, aligner, plot_cells=False)
-plt.savefig("{}/{}_alignment.png".format(fig_path, gene), format="png", dpi=300, bbox_inches="tight")
-plt.close() 
 
 ## Open and process anndata files
 if subset_data:
@@ -69,16 +68,20 @@ adata_query.obs["time"] = adata_query.obs.monocle_pseudotime
 #sc.pp.log1p(adata_ref)
 #sc.pp.log1p(adata_query)
 
-## Barplot
 print("Silently plotting basic barplot; which adds bin ids to adata")
 VisualUtils.plot_celltype_barplot(adata_ref, 15, "initial_clusters", clusters)
 VisualUtils.plot_celltype_barplot(adata_query, 15, "initial_clusters", clusters)
-print("Trying barplot" , gene)
-VisualUtils.visualize_gene_alignment(aligner.results_map[gene], adata_ref, adata_query, 
-"initial_clusters", cmap=clusters)
-#VisualUtils.show_gene_alignment(gene, aligner, adata_ref, adata_query, "initial_clusters", clusters)
-plt.savefig("{}/{}_alignment_bins.png".format(fig_path, gene), format="png", dpi=300, bbox_inches="tight")
-plt.close()
+
+## Barplot
+for gene in genes:
+    if gene not in aligner.results_map.keys():
+        print(gene,"not found in alignment result. Is gene not in HVG list or mispelled? Skipping")
+    else:
+        print("Plotting barplot" , gene)
+        VisualUtils.visualize_gene_alignment(aligner.results_map[gene], adata_ref, adata_query, 
+        "initial_clusters", cmap=clusters)
+        plt.savefig("{}/{}_alignment_bins.png".format(fig_path, gene), format="png", dpi=300, bbox_inches="tight")
+        plt.close()
 
 
 adata_ref.obs['bin_ids'].to_csv(os.path.join(odir, "g2g_white_bin_ids.tsv"), sep='\t')
