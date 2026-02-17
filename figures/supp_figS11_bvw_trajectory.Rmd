@@ -90,13 +90,13 @@ trial
 ##A: integration methods summary
 Just umaps with initial clusters. 
 ```{r}
-DimPlot(trial, reduction = "umap.rpca", group.by = "initial_clusters") + 
+DimPlot(trial, reduction = "umap.rpca", group.by = "initial_clusters", raster = T) + 
     scale_colour_manual(values = clusters, name="Beige vs white\nclusters", labels=function(x) paste0("b",x)) +
     ggtitle(NULL) + theme_hp
-DimPlot(trial, reduction = "umap.harmony",group.by = "initial_clusters") + 
+DimPlot(trial, reduction = "umap.harmony",group.by = "initial_clusters", raster = T) + 
     scale_colour_manual(values = clusters, name="Beige vs white\nclusters", labels=function(x) paste0("b",x)) +
     ggtitle(NULL) + theme_hp
-DimPlot(trial, reduction = "umap.fastmnn",group.by = "initial_clusters") + 
+DimPlot(trial, reduction = "umap.fastmnn",group.by = "initial_clusters", raster = T) + 
     scale_colour_manual(values = clusters, name="Beige vs white\nclusters", labels=function(x) paste0("b",x)) +
     ggtitle(NULL) + theme_hp
 ```
@@ -121,6 +121,32 @@ ggplot(mean_per_cluster, aes(y=initial_clusters, fill=pscondition, x=mean_pseudo
 ggsave(here(fig_dir, "wvb_violin_with_variance.png"), width = 9, height = 8)
 ```
 
+## C: g2g trajectory comparsion (genes)
+
+```{r}
+g2g_dataname =  paste0(dataname , "_g2g")
+```
+
+![acta2](`r here(fig_dir,g2g_dataname, "ACTA2_alignment.png")`)
+![mgp](`r here(fig_dir,g2g_dataname, "MGP_alignment.png")`)
+![pck1](`r here(fig_dir,g2g_dataname, "FASN_alignment.png")`)
+
+## D: Beige trajectory 
+white trajectory in main
+```{r}
+monocleb = readRDS(here(odir,"beige_monocle_complete_analysis_umap.rds"))
+monocleb$progen_clusters = paste0("p", monocleb$progen_clusters)
+table(monocleb$time.progen_clusters)
+```
 
 
+```{r Dprogenitor_colours}
+p=plot_cells(monocleb, color_cells_by = "time.progen_clusters", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.75,  alpha = 0.25,
+             graph_label_size = 5)+ theme_hp +
+    scale_colour_manual(values=ps_cols, name="Progenitor\ncluster\nor time", limits = c(names(prog_cols), "day1", "day3"))  +
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size=5)))
+p$layers[[1]]$aes_params$colour = 'transparent' 
+p
+```
 

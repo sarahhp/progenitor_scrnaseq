@@ -6,6 +6,7 @@ import seaborn as sb
 import pandas as pd
 import warnings
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 warnings.filterwarnings("ignore")
 
 from genes2genes import Main
@@ -34,10 +35,11 @@ with open(odir + '/g2g_aligner.pkl', 'rb') as file:
     
 ## Plot a gene
 genes=[
-    "PEMT","PLIN1","ICAM1","PM20D1","MGP",
-    "FABP4","FABP3","FASN","ACLY","LPL","PCK1",
+    "ACTA2","TAGLN","PHLDA1","MGP","PLIN1","PCK1",
+    "PEMT","ICAM1","PM20D1",
+    "FABP4","FABP3","FASN","ACLY","LPL",
     "BRD4","SLC3A2",
-    "VIM","ACTA2","TAGLN","PHLDA1",
+    "VIM",
     "CD36","CXCL8",
     #diff genes
     "ENPP5", "ITPKA", "FPR2",
@@ -50,8 +52,30 @@ for gene in genes:
     else:
         print("Plotting " + gene)
         VisualUtils.plotTimeSeries(gene, aligner, plot_cells=True)
-        plt.savefig("{}/{}_alignment.png".format(fig_path, gene), format="png", dpi=300, bbox_inches="tight")
-        plt.close() 
+        #Keep only left-most figure (trajectory)
+        axes = plt.gcf().get_axes()
+        axes[1].remove()
+        axes[2].remove()
+        
+        #Re-add x axis
+        left_ax = axes[0]
+        left_ax.set_axis_on()
+        left_ax.set_xlabel("Pseudotime (Monocle)")
+        left_ax.set_ylabel("TSS expression")
+        
+        #change colours
+        colors = ["#1F78B4","#FF7F00"]
+        
+        for line, col in zip(left_ax.lines, colors):
+            line.set_color(col)
+        
+        scatters = [c for c in left_ax.collections if hasattr(c, "get_offsets")]
+        for coll, col in zip(scatters, colors):
+            alpha = coll.get_alpha() or 1.0 #keep previous alpha
+            coll.set_facecolor(mcolors.to_rgba(col, alpha))
+        for device in ["png","pdf"]:
+            plt.savefig("{}/{}_alignment.{}".format(fig_path, gene, device), format=device, dpi=300, bbox_inches="tight")
+        plt.close()  
 
 ## Open and process anndata files
 if subset_data:

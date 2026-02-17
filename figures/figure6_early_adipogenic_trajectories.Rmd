@@ -29,6 +29,8 @@ library(ggplot2)
 library(ggrepel)
 library(here)
 library(tidyr)
+library(scater)
+library(velociraptor)
 ```
 
 ```{r global_params}
@@ -54,8 +56,14 @@ theme_hp = theme_classic(base_size = 15) +
         axis.ticks = element_line(linewidth = 0.25),
         strip.background = element_blank())
 theme_set(theme_hp)
+
+#Time point/condition colours
 pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486", "#E31A1C")
 names(pal) =  c("white.day3","white.day1","day0", "beige.day1","beige.day3")
+pal_white = pal[3:1]
+names(pal_white) = c("day0","day1","day3")
+
+#progenitor colours
 prog_cols = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00")
 prog_levels = c("p5","p4","p6","p3","p0","p1","p2")
 names(prog_cols) = paste0("p", 0:(length(prog_levels)-1))
@@ -114,11 +122,14 @@ ggsave(here(fig_dir, "wvb_violin_with_variance.png"), width = 9, height = 8)
 ## B: G2G trajectory comparison
 ```{r}
 g2g_dataname =  paste0(dataname , "_g2g")
-fig_indir = here("analysis", module, "figures", g2g_dataname)
-
 ```
 
-![mgp](`r here(fig_indir, "P:r1@MGP_alignment.png")`)
+![tagln](`r here(fig_dir,g2g_dataname, "P:r1@TAGLN_alignment.png")`)
+![phlda1](`r here(fig_dir,g2g_dataname, "P:r1@PHLDA1_alignment.png")`)
+![plin1](`r here(fig_dir,g2g_dataname, "P:r1@PLIN1_alignment.png")`)
+
+![supp - mgp](`r here(fig_dir,g2g_dataname, "P:r1@MGP_alignment.png")`)
+
 
 # Beige vs white
 
@@ -151,61 +162,84 @@ head(meta)
 monoclew = readRDS(here(odir,"white_monocle_complete_analysis_umap.rds"))
 monoclew$progen_clusters = paste0("p", monoclew$progen_clusters)
 table(monoclew$time.progen_clusters)
-
-monocleb = readRDS(here(odir,"beige_monocle_complete_analysis_umap.rds"))
-monocleb$progen_clusters = paste0("p", monocleb$progen_clusters)
-table(monocleb$time.progen_clusters)
 ```
 
-## Bvw Violin Plots
+## C: Monocle UMAP
 
-```{r paired_ridge_plot1}
-VlnPlot(merged_obj, features = "monocle_pseudotime", group.by = "initial_clusters", split.by="pscondition",
-        cols= c("#FF7F00",  "#1F78B4"), pt.size = 0, split.plot = T) + coord_flip(expand=F) +
-  scale_x_discrete(limits = rev(cluster_levels) )+
-  labs(x="Time // Progenitor cluster", y="Monocle pseudotime", title=NULL) + guides(fill=guide_legend(reverse=T)) +
-    theme_hp
+```{r Cprogenitor_colours}
+
+p=plot_cells(monoclew, color_cells_by = "time.progen_clusters", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.75,  alpha = 0.25,
+             graph_label_size = 5)+ theme_hp +
+    scale_colour_manual(values=ps_cols, name="Progenitor\ncluster\nor time", limits = c(names(prog_cols), "day1", "day3"))  +
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size=5)))
+p$layers[[1]]$aes_params$colour = 'transparent' 
+p
+```
+
+```{r}
+filt = monoclew[, colData(monoclew)$time.progen_clusters %in% c(paste0("p", 0:6), "day1")]
+p=plot_cells(filt, color_cells_by = "time.progen_clusters", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.25,
+             label_roots=F)+ theme_hp +
+    scale_colour_manual(values=c(prog_cols, pal_white[2]), name="Progenitor\ncluster\nor time", )  +
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size=3))) +
+    scale_x_continuous(breaks =c(0,5,10))+
+    facet_wrap(~time.progen_clusters, ncol = 4) + coord_cartesian(xlim=c(0,10))
+p$layers[[1]]$aes_params$colour = 'transparent' 
+p 
+```
+
+```{r}
+rm(monocleb)
+```
+
+## D: RNA velocity
+```{r}
+velo = readRDS(here(odir, "dynamical_velocity_output.rds"))
+sce = readRDS(here(odir, "dynamical_velocity_scexperiment.rds"))
+velo
+colnames(colData(velo))
+colnames(colData(sce))
 ```
 
 
 ```{r}
-ggplot(meta, 
-       aes(x=monocle_pseudotime, y=initial_clusters, fill=initial_clusters)) + 
-    geom_boxplot(position="dodge")+
-  facet_grid(pscondition~.) + scale_fill_manual(values=clusters, name="Bvw clusters", labels = function(x)paste0("b",x)) +  
-    coord_cartesian(expand=F) + scale_y_discrete(labels = function(x)paste0("b",x),limits=rev(cluster_levels)) +
-    labs(y="Bvw clusters", x="Monocle pseudotime", title=NULL)
+embedded <- embedVelocity(reducedDim(sce, "UMAP"), velo)
+dim(embedded)
+grid.df <- gridVectors(sce, embedded, use.dimred = "UMAP", resolution=30)
+
+head(grid.df)
+dim(grid.df)
+if (subset_data){pt_size=1} else{pt_size=0.2}
 ```
 
 
 ```{r}
-ggplot(meta, 
-       aes(x=monocle_pseudotime, y=initial_clusters, fill=initial_clusters)) + 
-    geom_violin(scale="width", position="dodge")+
-  facet_grid(pscondition~.) + scale_fill_manual(values=clusters, name="Bvw clusters", labels = function(x)paste0("b",x)) +  
-    coord_cartesian(expand=F) + scale_y_discrete(labels = function(x)paste0("b",x),limits=rev(cluster_levels)) +
-    labs(y="Bvw clusters", x="Monocle pseudotime", title=NULL)
+plotReducedDim(sce, "UMAP",colour_by="initial_clusters", point_size=pt_size) +
+    geom_segment(data=grid.df, mapping=aes(x=start.V1, y=start.V2, 
+        xend=end.V1, yend=end.V2, colour=NULL),arrow=arrow(length=unit(0.05, "inches"))) +
+  scale_colour_manual(values=clusters)
 
-ggplot(meta, 
-       aes(x=monocle_pseudotime, y=initial_clusters, fill=pscondition)) + 
-    geom_violin(scale="width", position="dodge")+
-    scale_fill_manual(values=c("#FF7F00","#1F78B4"), name="Pseudotime\ncalculated on", guide=guide_legend(reverse=T)) +  
-    coord_cartesian(expand=F) + 
-    scale_y_discrete(labels = function(x)paste0("b",x),limits=rev(cluster_levels)) +
-    labs(y="Bvw clusters", x="Monocle pseudotime", title=NULL)
+plotReducedDim(sce, "UMAP",colour_by="time", point_size=pt_size) +
+    geom_segment(data=grid.df, mapping=aes(x=start.V1, y=start.V2, 
+        xend=end.V1, yend=end.V2, colour=NULL),arrow=arrow(length=unit(0.05, "inches"))) +
+  scale_colour_manual(values=pal_white)
 ```
-
-### Progenitor colours
-```{r paired_ridge_plot}
-VlnPlot(merged_obj, features = "monocle_pseudotime", group.by = "time.progen_clusters", split.by="pscondition",
-        cols= c("#FF7F00",  "#1F78B4"), pt.size = 0, split.plot = T) + coord_flip(expand=F) +
-  scale_x_discrete(limits = rev(c(prog_levels, paste0("day",c(1,3))))) +
-  labs(x="Time // Progenitor cluster", y="Monocle pseudotime", title=NULL) + guides(fill=guide_legend(reverse=T)) +
-    theme_hp
-```
-
 
 ```{r}
+options(ggrastr.default.dpi=600)
+plotReducedDim(sce, "UMAP",colour_by="time.progen_clusters", point_size=pt_size,rasterise=T) +
+    geom_segment(data=grid.df, mapping=aes(x=start.V1, y=start.V2, 
+        xend=end.V1, yend=end.V2, colour=NULL), arrow=arrow(length=unit(0.05, "inches")),
+        ) +theme_hp+
+  scale_colour_manual(values=c(prog_cols, pal_white))
+```
+
+## F:Progenitor colours Violin plot
+
+
+```{r Cbvw_prog_cols_paired_ridge_plot}
 ps_cols = c(prog_cols, pal[1:2])
 names(ps_cols) = c(names(prog_cols), "day1","day3")
 ggplot(filter(meta, sample_or_progen_cluster != "day0"), 
@@ -216,178 +250,10 @@ ggplot(filter(meta, sample_or_progen_cluster != "day0"),
     labs(y="Time // Progenitor cluster", x="Monocle pseudotime", title=NULL)
 ```
 
-## B: g2g Alignment
-
-![day0]()
-
-## D: UMAPs
-
-```{r}
-p=plot_cells(monoclew, color_cells_by = "time.progen_clusters", label_leaves = F, label_branch_points = F, 
-                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.75,  alpha = 0.5,
-             graph_label_size = 5)+ theme_hp +
-    scale_colour_manual(values=ps_cols, name="Progenitor\ncluster\nor time", limits = c(names(prog_cols), "day1", "day3"))  +
-    guides(colour = guide_legend(override.aes = list(alpha = 1, size=5)))
-p$layers[[1]]$aes_params$colour = 'transparent' 
-p
-```
-
-```{r}
-p=plot_cells(monocleb, color_cells_by = "time.progen_clusters", label_leaves = F, label_branch_points = F, 
-                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.75,  alpha = 0.5,
-             graph_label_size = 5)+ theme_hp +
-    scale_colour_manual(values=ps_cols, name="Progenitor\ncluster\nor time", limits = c(names(prog_cols), "day1", "day3"))  +
-    guides(colour = guide_legend(override.aes = list(alpha = 1, size=5)))
-p$layers[[1]]$aes_params$colour = 'transparent' 
-p
-```
-
-## Play with denisty maps
-
-```{r}
-bvwmeta = read.delim(here(odir, "monocle_pseudotime.tsv"))
-head(bvwmeta)
-
-ggplot(bvwmeta, aes(x=monocle_pseudotime, fill=pscondition)) + geom_density(alpha=0.5)
-ggplot(bvwmeta, aes(x=monocle_pseudotime, fill=cond.time)) + geom_density(alpha=0.5) +
-    scale_fill_manual(values=pal)
-
-ggplot(bvwmeta, aes(x=monocle_pseudotime, fill=time)) + geom_density(alpha=0.5) +
-    scale_fill_manual(values=pal[c(3,2,1)])
-```
 
 
-## TSS level trajectories
-```{r tss_setup2}
-module = "beige_vs_white"
-dataname="tss_fastmnn"
-odir = here("output", module, dataname)
-clusters =   tvthemes::gravityFalls_pal()(13)
-cluster_levels = as.character(c(7,11,1,10,3,8,9,0,5,6,2,4))
-```
-## A: Violins
-
-```{r}
-meta= read.delim(here(odir, "monocle_pseudotime.tsv"))
-meta$time.progen_clusters = factor(meta$time.progen_clusters )
-meta$initial_clusters = factor(meta$initial_clusters, levels = c(0:11))
-meta$cond.time = factor(meta$cond.time, levels=c("white.day3","white.day1","asc.day0","beige.day1","beige.day3"))
-```
-
-```{r A_tss_beige_vs_white_violin}
-ggplot(meta, 
-       aes(x=monocle_pseudotime, y=initial_clusters, fill=pscondition)) + 
-    geom_violin(scale="width", position="dodge")+
-    scale_fill_manual(values=c("#FF7F00","#1F78B4"), name="Pseudotime\ncalculated on", guide=guide_legend(reverse=T)) +  
-    coord_cartesian(expand=F) + 
-    scale_y_discrete(labels = function(x)paste0("t",x),limits=rev(cluster_levels)) +
-    labs(y="TSS clusters", x="Monocle pseudotime", title=NULL)
-
-ggplot(meta, 
-       aes(x=monocle_pseudotime, y=initial_clusters, colour=pscondition, fill=initial_clusters)) + 
-    geom_violin(scale="width", position="dodge")+
-    scale_fill_manual(values=clusters, guide="none") +
-    scale_colour_manual(values=c("black","grey"), name="Pseudotime\ncalculated on", guide=guide_legend(reverse=T)) +  
-    coord_cartesian(expand=F) + 
-    scale_y_discrete(labels = function(x)paste0("t",x),limits=rev(cluster_levels)) +
-    labs(y="TSS clusters", x="Monocle pseudotime", title=NULL)
-```
 
 
-```{r Cmonocleviolin_stacked}
-names(ps_cols) = c(names(prog_cols), "day1","day3")
-ggplot(filter(meta, sample_or_progen_cluster != "day0"), 
-       aes(x=monocle_pseudotime, y=time.progen_clusters, fill=time.progen_clusters)) + 
-    geom_violin(scale="width", show.legend = F)+
-    coord_cartesian(expand=F) +
-  facet_grid(pscondition~.) + scale_fill_manual(values=ps_cols, name="identity") + 
-  scale_y_discrete(limits=c(paste0("day",c(3,1)), rev(prog_levels))) +
-    labs(y="Progenitor cluster or time") +theme_hp
-```
-
-```{r Cmonocleviolin_side_by_side}
-
-ggplot(filter(meta, sample_or_progen_cluster != "day0"), 
-       aes(x=monocle_pseudotime, y=time.progen_clusters, fill=time.progen_clusters)) + 
-    geom_violin(scale="width", show.legend = F)+
-    coord_cartesian(expand=F) +
-  facet_grid(.~pscondition) + scale_fill_manual(values=ps_cols, name="identity") + 
-  scale_y_discrete(limits=c(paste0("day",c(3,1)), rev(prog_levels))) +
-    labs(y="Progenitor cluster or time") +theme_hp
-```
-
-### read data
-```{r}
-beige = readRDS(here(odir,"beige_monocle_complete_analysis_umap.rds"))
-beige$progen_clusters = paste0("p", beige$progen_clusters)
-table(beige$progen_clusters)
-```
-
-
-## A: UMAP with trajectory
-
-```{r Alarge_umap}
-p=plot_cells(beige, color_cells_by = "initial_clusters", label_leaves = F, label_branch_points = F, 
-                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.5,  alpha = 0.5,
-             graph_label_size = 5)+ theme_hp +
-    scale_colour_manual(values=clusters, name="TSS clusters", labels=function(x) paste0("t",x))  +
-    guides(colour = guide_legend(override.aes = list(alpha = 1, size=5)))
-p$layers[[1]]$aes_params$colour = 'transparent' 
-p
-```
-
-
-```{r Alarge_umap_save}
-for (d in c("png","pdf")){
-    ggsave(here(fig_dir,paste0("Aggsave_monocle_UMAP.",d)), dpi=600)
-}
-```
-## B Progenitor trajectories
-```{r Csplit_umap}
-beige_progen = beige[,subset(colData(beige), grepl("^p[0-7]",time.progen_clusters)) %>%row.names]
-w=plot_cells(beige_progen, color_cells_by = "progen_clusters", label_leaves = F, label_branch_points = F, 
-                trajectory_graph_color="black", label_cell_groups = F, cell_size=0.2)
-w$layers[[1]]$aes_params$colour = 'transparent'
-w + facet_wrap(~ progen_clusters) +
-  scale_colour_manual(values=prog_cols,name = "cluster") +
-    theme_hp + coord_cartesian(x=c(-11,11), y=c(-6, 6))
-
-for (d in c("png","pdf")){
-    ggsave(here(fig_dir,paste0("Bggsave_MonocleUMAPs.",d)), dpi=600)
-}
-```
-
-
-## Density maps
-
-```{r}
-ggplot(meta, aes(x=monocle_pseudotime, fill=condition)) + geom_density(alpha=0.5) +
-    scale_fill_manual(values=pal[c(3,5,1)])
-ggplot(meta, aes(x=monocle_pseudotime, fill=pscondition)) + geom_density(alpha=0.5) +
-    scale_fill_manual(values=pal[c(5,1)])
-
-ggplot(meta, aes(x=monocle_pseudotime, fill=pscondition)) + 
-    geom_histogram(alpha=0.5, bins=15, position="identity") +
-    scale_fill_manual(values=pal[c(3,5,1)])
-
-ggplot(meta, aes(x=monocle_pseudotime, fill=pscondition)) + 
-    geom_histogram( alpha=0.5, bins=30, position = "identity") +
-    scale_fill_manual(values=pal[c(5,1)])
-
-ggplot(meta, aes(x=monocle_pseudotime, fill=time)) + geom_density(alpha=0.5) +
-    scale_fill_manual(values=pal[c(3,2,1)])
-
-ggplot(meta, aes(x=monocle_pseudotime, fill=cond.time)) + geom_density(alpha=0.5) +
-    scale_fill_manual(values=pal)
-```
-
-
-```{r}
-ggplot(meta, aes(x=monocle_pseudotime, fill=cond.time)) + geom_density(alpha=0.5) +
-    scale_fill_manual(values=c(pal ,"lavender","orange")) +  
-    geom_vline(xintercept = seq(from=0, to=1, length.out=16))
-
-```
 
 
 
