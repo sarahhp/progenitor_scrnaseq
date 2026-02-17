@@ -1,0 +1,126 @@
+---
+title: "supp_figS11_bvw_trajectory"
+author: "Sarah Hazell Pickering"
+date: "2026-02-16"
+output: html_document
+---
+
+## Setup
+
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(Seurat)
+library(clusterProfiler)
+library(dplyr)
+library(enrichplot)
+library(ggplot2)
+library(ggrepel)
+library(here)
+library(tidyr)
+```
+
+```{r global_params}
+load_data = T #loading data
+subset_data = F
+
+rmd_filename = "supp_figS11_bvw_trajectory"
+i_am(file.path("figures", paste0(rmd_filename,".Rmd")))
+```
+
+```{r setup}
+set.seed(8)
+fig_dir = here("figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486", "#E31A1C")
+names(pal) =  c("white.day3","white.day1","day0", "beige.day1","beige.day3")
+prog_cols = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00")
+prog_levels = c("p5","p4","p6","p3","p0","p1","p2")
+names(prog_cols) = paste0("p", 0:(length(prog_levels)-1))
+ps_cols = c(prog_cols, pal[2:1])
+names(ps_cols) = c(names(prog_cols),"day1","day3")
+```
+
+# bvw level trajectories
+```{r bvw_setup}
+module = "beige_vs_white"
+dataname="bvw_fastmnn"
+odir = here("output", module, dataname)
+clusters =   MetBrewer::met.brewer("Redon", 12) 
+cluster_levels = as.character(c(8,3,11,9,6,0,7,10,1,2,5,4))
+```
+## Load 
+### Master pseudotime
+```{r}
+meta= read.delim(here(odir, "monocle_pseudotime.tsv"))
+meta$time.progen_clusters = factor(meta$time.progen_clusters )
+meta$initial_clusters = factor(meta$initial_clusters, levels = c(0:11))
+meta$cond.time = factor(meta$cond.time, levels=c("white.day3","white.day1","asc.day0","beige.day1","beige.day3"))
+table(meta$initial_clusters)
+table(meta$cond.time)
+```
+### Subset summary
+Ran monocle trajectory analysis 12x on random subsamples of the data (3300 cells per condition)
+
+```{r}
+dns_meta = read.delim(here(odir, "subset_summary_monocle_pseudotime.tsv"))
+mean_per_cluster = group_by(dns_meta, subset_no, initial_clusters, pscondition) %>% 
+    summarise(mean_pseudotime= mean(monocle_pseudotime)) %>% 
+    mutate(initial_clusters = factor(initial_clusters, levels=cluster_levels))
+head(mean_per_cluster)
+table(mean_per_cluster$subset_no)
+```
+### Integration trial seurat object
+```{r}
+indir= here("output", module, "bvw_integration_trial")
+trial = readRDS(here(indir, "complete_analysis.rds"))
+trial
+```
+
+##A: integration methods summary
+Just umaps with initial clusters. 
+```{r}
+DimPlot(trial, reduction = "umap.rpca", group.by = "initial_clusters") + 
+    scale_colour_manual(values = clusters, name="Beige vs white\nclusters", labels=function(x) paste0("b",x)) +
+    ggtitle(NULL) + theme_hp
+DimPlot(trial, reduction = "umap.harmony",group.by = "initial_clusters") + 
+    scale_colour_manual(values = clusters, name="Beige vs white\nclusters", labels=function(x) paste0("b",x)) +
+    ggtitle(NULL) + theme_hp
+DimPlot(trial, reduction = "umap.fastmnn",group.by = "initial_clusters") + 
+    scale_colour_manual(values = clusters, name="Beige vs white\nclusters", labels=function(x) paste0("b",x)) +
+    ggtitle(NULL) + theme_hp
+```
+```{r}
+rm(trial)
+```
+
+
+##B: White vs beige violin
+```{r}
+mean_per_cluster$cluster.pscond = paste(mean_per_cluster$initial_clusters, sep=".",mean_per_cluster$pscondition)
+ggplot(mean_per_cluster, aes(y=initial_clusters, fill=pscondition, x=mean_pseudotime))+
+    geom_violin(data=meta, aes(x=monocle_pseudotime),scale="width") + 
+    geom_boxplot(fill="transparent", position=position_dodge(0.9),
+                 aes(group=cluster.pscond, colour="n=12 subsets")) +
+     scale_fill_manual(values=c("#FF7F00","#1F78B4"), name="Pseudotime\ncalculated on",
+                       guide=guide_legend(reverse=T)) +
+    scale_colour_manual(values="black", name="Average\npseudotime") +
+    coord_cartesian(expand=F) + scale_y_discrete(limits = rev(cluster_levels),
+                                                 label=function(x)paste0("t",x)) +
+    labs(x="Monocle pseudotime", title=NULL, y="Beige vs white clusters") 
+ggsave(here(fig_dir, "wvb_violin_with_variance.png"), width = 9, height = 8)
+```
+
+
+
+

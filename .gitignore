@@ -24,3 +24,4 @@ __pycache__
 idx.annoy
 ref.Rds
 model.pt
+*subset_[0-9]*/

@@ -63,6 +63,53 @@ ps_cols = c(prog_cols, pal[2:1])
 names(ps_cols) = c(names(prog_cols),"day1","day3")
 ```
 
+# TSS level trajectories
+```{r tss_setup}
+module = "beige_vs_white"
+dataname="tss_fastmnn"
+odir = here("output", module, dataname)
+clusters =   tvthemes::gravityFalls_pal()(13)
+cluster_levels = as.character(c(7,11,1,10,3,8,9,0,5,6,2,4))
+```
+## Load 
+### Master pseudotime
+```{r}
+meta= read.delim(here(odir, "monocle_pseudotime.tsv"))
+meta$time.progen_clusters = factor(meta$time.progen_clusters )
+meta$initial_clusters = factor(meta$initial_clusters, levels = c(0:11))
+meta$cond.time = factor(meta$cond.time, levels=c("white.day3","white.day1","asc.day0","beige.day1","beige.day3"))
+table(meta$initial_clusters)
+table(meta$cond.time)
+```
+### Subset summary
+Ran monocle trajectory analysis 12x on random subsamples of the data (3300 cells or 50% of cells per condition, whichever was smaller)
+
+```{r}
+dns_meta = read.delim(here(odir, "subset_summary_monocle_pseudotime.tsv"))
+mean_per_cluster = group_by(dns_meta, subset_no, initial_clusters, pscondition) %>% 
+    summarise(mean_pseudotime= mean(monocle_pseudotime)) %>% 
+    mutate(initial_clusters = factor(initial_clusters, levels=cluster_levels))
+head(mean_per_cluster)
+table(mean_per_cluster$subset_no)
+```
+
+
+##A: White vs beige violin
+```{r}
+mean_per_cluster$cluster.pscond = paste(mean_per_cluster$initial_clusters, sep=".",mean_per_cluster$pscondition)
+ggplot(mean_per_cluster, aes(y=initial_clusters, fill=pscondition, x=mean_pseudotime))+
+    geom_violin(data=meta, aes(x=monocle_pseudotime),scale="width") + 
+    geom_boxplot(fill="transparent", position=position_dodge(0.9),
+                 aes(group=cluster.pscond, colour="n=12 subsets")) +
+     scale_fill_manual(values=c("#FF7F00","#1F78B4"), name="Pseudotime\ncalculated on",
+                       guide=guide_legend(reverse=T)) +
+    scale_colour_manual(values="black", name="Average\npseudotime") +
+    coord_cartesian(expand=F) + scale_y_discrete(limits = rev(cluster_levels),
+                                                 label=function(x)paste0("b",x)) +
+    labs(x="Monocle pseudotime", title=NULL, y="TSS clusters") 
+ggsave(here(fig_dir, "wvb_violin_with_variance.png"), width = 9, height = 8)
+```
+
 
 # Beige vs white
 
@@ -101,9 +148,9 @@ monocleb$progen_clusters = paste0("p", monocleb$progen_clusters)
 table(monocleb$time.progen_clusters)
 ```
 
-## A: Violin Plots
+## Bvw Violin Plots
 
-```{r Apaired_ridge_plot}
+```{r paired_ridge_plot}
 VlnPlot(merged_obj, features = "monocle_pseudotime", group.by = "initial_clusters", split.by="pscondition",
         cols= c("#FF7F00",  "#1F78B4"), pt.size = 0, split.plot = T) + coord_flip(expand=F) +
   scale_x_discrete(limits = rev(cluster_levels) )+
@@ -115,9 +162,27 @@ VlnPlot(merged_obj, features = "monocle_pseudotime", group.by = "initial_cluster
 ```{r}
 ggplot(meta, 
        aes(x=monocle_pseudotime, y=initial_clusters, fill=initial_clusters)) + 
+    geom_boxplot(position="dodge")+
+  facet_grid(pscondition~.) + scale_fill_manual(values=clusters, name="Bvw clusters", labels = function(x)paste0("b",x)) +  
+    coord_cartesian(expand=F) + scale_y_discrete(labels = function(x)paste0("b",x),limits=rev(cluster_levels)) +
+    labs(y="Bvw clusters", x="Monocle pseudotime", title=NULL)
+```
+
+
+```{r}
+ggplot(meta, 
+       aes(x=monocle_pseudotime, y=initial_clusters, fill=initial_clusters)) + 
     geom_violin(scale="width", position="dodge")+
   facet_grid(pscondition~.) + scale_fill_manual(values=clusters, name="Bvw clusters", labels = function(x)paste0("b",x)) +  
     coord_cartesian(expand=F) + scale_y_discrete(labels = function(x)paste0("b",x),limits=rev(cluster_levels)) +
+    labs(y="Bvw clusters", x="Monocle pseudotime", title=NULL)
+
+ggplot(meta, 
+       aes(x=monocle_pseudotime, y=initial_clusters, fill=pscondition)) + 
+    geom_violin(scale="width", position="dodge")+
+    scale_fill_manual(values=c("#FF7F00","#1F78B4"), name="Pseudotime\ncalculated on", guide=guide_legend(reverse=T)) +  
+    coord_cartesian(expand=F) + 
+    scale_y_discrete(labels = function(x)paste0("b",x),limits=rev(cluster_levels)) +
     labs(y="Bvw clusters", x="Monocle pseudotime", title=NULL)
 ```
 
@@ -189,6 +254,57 @@ module = "beige_vs_white"
 dataname="tss_fastmnn"
 odir = here("output", module, dataname)
 clusters =   tvthemes::gravityFalls_pal()(13)
+cluster_levels = as.character(c(7,11,1,10,3,8,9,0,5,6,2,4))
+```
+## A: Violins
+
+```{r}
+meta= read.delim(here(odir, "monocle_pseudotime.tsv"))
+meta$time.progen_clusters = factor(meta$time.progen_clusters )
+meta$initial_clusters = factor(meta$initial_clusters, levels = c(0:11))
+meta$cond.time = factor(meta$cond.time, levels=c("white.day3","white.day1","asc.day0","beige.day1","beige.day3"))
+```
+
+```{r A_tss_beige_vs_white_violin}
+ggplot(meta, 
+       aes(x=monocle_pseudotime, y=initial_clusters, fill=pscondition)) + 
+    geom_violin(scale="width", position="dodge")+
+    scale_fill_manual(values=c("#FF7F00","#1F78B4"), name="Pseudotime\ncalculated on", guide=guide_legend(reverse=T)) +  
+    coord_cartesian(expand=F) + 
+    scale_y_discrete(labels = function(x)paste0("t",x),limits=rev(cluster_levels)) +
+    labs(y="TSS clusters", x="Monocle pseudotime", title=NULL)
+
+ggplot(meta, 
+       aes(x=monocle_pseudotime, y=initial_clusters, colour=pscondition, fill=initial_clusters)) + 
+    geom_violin(scale="width", position="dodge")+
+    scale_fill_manual(values=clusters, guide="none") +
+    scale_colour_manual(values=c("black","grey"), name="Pseudotime\ncalculated on", guide=guide_legend(reverse=T)) +  
+    coord_cartesian(expand=F) + 
+    scale_y_discrete(labels = function(x)paste0("t",x),limits=rev(cluster_levels)) +
+    labs(y="TSS clusters", x="Monocle pseudotime", title=NULL)
+```
+
+
+```{r Cmonocleviolin_stacked}
+names(ps_cols) = c(names(prog_cols), "day1","day3")
+ggplot(filter(meta, sample_or_progen_cluster != "day0"), 
+       aes(x=monocle_pseudotime, y=time.progen_clusters, fill=time.progen_clusters)) + 
+    geom_violin(scale="width", show.legend = F)+
+    coord_cartesian(expand=F) +
+  facet_grid(pscondition~.) + scale_fill_manual(values=ps_cols, name="identity") + 
+  scale_y_discrete(limits=c(paste0("day",c(3,1)), rev(prog_levels))) +
+    labs(y="Progenitor cluster or time") +theme_hp
+```
+
+```{r Cmonocleviolin_side_by_side}
+
+ggplot(filter(meta, sample_or_progen_cluster != "day0"), 
+       aes(x=monocle_pseudotime, y=time.progen_clusters, fill=time.progen_clusters)) + 
+    geom_violin(scale="width", show.legend = F)+
+    coord_cartesian(expand=F) +
+  facet_grid(.~pscondition) + scale_fill_manual(values=ps_cols, name="identity") + 
+  scale_y_discrete(limits=c(paste0("day",c(3,1)), rev(prog_levels))) +
+    labs(y="Progenitor cluster or time") +theme_hp
 ```
 
 ### read data
@@ -232,37 +348,6 @@ for (d in c("png","pdf")){
 }
 ```
 
-## C: Violins
-
-```{r}
-meta= read.delim(here(odir, "monocle_pseudotime.tsv"))
-meta$time.progen_clusters = factor(meta$time.progen_clusters )
-meta$cond.time = factor(meta$cond.time, levels=c("white.day3","white.day1","asc.day0","beige.day1","beige.day3"))
-```
-
-
-
-```{r Cmonocleviolin_stacked}
-names(ps_cols) = c(names(prog_cols), "day1","day3")
-ggplot(filter(meta, sample_or_progen_cluster != "day0"), 
-       aes(x=monocle_pseudotime, y=time.progen_clusters, fill=time.progen_clusters)) + 
-    geom_violin(scale="width", show.legend = F)+
-    coord_cartesian(expand=F) +
-  facet_grid(pscondition~.) + scale_fill_manual(values=ps_cols, name="identity") + 
-  scale_y_discrete(limits=c(paste0("day",c(3,1)), rev(prog_levels))) +
-    labs(y="Progenitor cluster or time") +theme_hp
-```
-
-```{r Cmonocleviolin_side_by_side}
-
-ggplot(filter(meta, sample_or_progen_cluster != "day0"), 
-       aes(x=monocle_pseudotime, y=time.progen_clusters, fill=time.progen_clusters)) + 
-    geom_violin(scale="width", show.legend = F)+
-    coord_cartesian(expand=F) +
-  facet_grid(.~pscondition) + scale_fill_manual(values=ps_cols, name="identity") + 
-  scale_y_discrete(limits=c(paste0("day",c(3,1)), rev(prog_levels))) +
-    labs(y="Progenitor cluster or time") +theme_hp
-```
 
 ## Density maps
 

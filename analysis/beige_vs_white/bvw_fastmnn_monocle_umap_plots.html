@@ -695,9 +695,9 @@ ggplot(filter(meta, sample_or_progen_cluster != &quot;day0&quot;),
 <div id="save" class="section level2">
 <h2>Save</h2>
 <pre class="r"><code>if (subset_data == FALSE){
-  write.table(meta, here(odir,&quot;monocle_pseudotime.tsv&quot;), sep=&quot;\t&quot;, row.names = F, quote=F)
+  write.table(meta, here(odir,&quot;monocle_pseudotime.tsv&quot;), sep=&quot;\t&quot;, quote=F)
 } else if (subset_data){ #if subset, don&#39;t save complete analysis
-  write.table(meta, file =here(odir,&quot;10%_monocle_pseudotime.tsv&quot;), sep=&quot;\t&quot;, row.names = F, quote=F)
+  write.table(meta, file =here(odir,&quot;10%_monocle_pseudotime.tsv&quot;), sep=&quot;\t&quot;, quote=F)
 }</code></pre>
 </div>
 

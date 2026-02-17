@@ -1,0 +1,298 @@
+---
+title: "Downsample & moncle white & beige"
+author: "Sarah Hazell Pickering"
+date: "2024-09-19"
+output: html_document
+---
+
+ We need a way to control for the random variation of monocle trajectory graph construction.  The best way to do this is to downsample our data 10 times and rerun. We can then using that information to inform the variance estimates or average the psueodtime values to provide a more robust estimate.
+
+
+FastMNN integration at the gene level.  No loop closing.  
+
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+library(here)
+library(monocle3)
+library(viridis)
+```
+
+#Setup
+```{r params}
+module = "beige_vs_white"
+method_name = "fastmnn"
+dataname = paste0("tss_",method_name)
+load_data = T #loading data
+subset_data = F
+
+if (exists("snakemake")){
+    seed = snakemake@params[["seed"]]
+} else(
+    seed = as.numeric(gsub(".* |:","",Sys.time()))
+)
+print(seed)
+
+rmd_filename = "tss_fastmnn_monocle_umap"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+indir = here("output", module, dataname) 
+odir =  here(indir,paste0("subset_", seed))
+```
+
+```{r setup}
+set.seed(seed)
+fig_dir = here("analysis", module, "figures", paste0(rmd_filename,"_subset_", seed))
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+clusters = tvthemes::gravityFalls_pal()(12)
+names(clusters) = 0:11
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+##load data
+```{r}
+if (subset_data){
+  sbs = readRDS(here(indir, "10%_complete_analysis.rds"))
+  Idents(sbs) = "seurat_clusters"
+} else {
+  sbs = readRDS(here(indir,"complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+sbs
+```
+
+# Subset
+```{r}
+Idents(sbs) = "cond.time"
+table(Idents(sbs))
+dns = subset(sbs, downsample = 3300, seed=seed)
+
+nhalf = floor(sum(Idents(dns)=="white.day1")/2)
+print(nhalf)
+
+day1_white = sample(WhichCells(dns, idents = "white.day1"), nhalf)
+day1_beige = sample(WhichCells(dns, idents = "beige.day1"), nhalf)
+day0_day3_cells = WhichCells(dns, expression = time %in% c("day0","day3"))
+dns = subset(dns, cells=c(day0_day3_cells, day1_white, day1_beige))
+table(Idents(dns))
+```
+
+
+# White 
+## Split seurat object
+```{r}
+white = subset(dns, idents=c("asc.day0", "white.day1","white.day3"))
+white
+```
+
+```{r}
+Idents(white) = "initial_clusters"
+table(Idents(white))
+white$seurat_clusters = white$initial_clusters
+```
+
+```{r}
+DimPlot(white, reduction="umap") + scale_colour_manual(values=clusters)
+```
+
+## Convert to monocle object
+```{r warning=FALSE}
+cds = SeuratWrappers::as.cell_data_set(white)
+cds
+```
+
+```{r}
+p= plot_cells(cds, show_trajectory_graph = F, cell_stroke=0.35, reduction_method = "UMAP", color_cells_by="seurat_clusters") + 
+  scale_colour_manual(values=clusters)
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+Overwriting the UMAP slot with tSNE because there might be a bug
+```{r}
+cds = cluster_cells(cds)
+p= plot_cells(cds, show_trajectory_graph = F, color_cells_by = "partition", label_cell_groups = F)
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+```{r}
+cds = learn_graph(cds, close_loop = F, use_partition = F)
+p=plot_cells(cds, color_cells_by = "seurat_clusters",
+           label_leaves=FALSE,
+           label_branch_points=FALSE, cell_stroke=0.35,
+           trajectory_graph_color = "black")+ 
+  scale_colour_manual(values=clusters)
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+
+## Order cells
+
+```{r}
+pick_root_node = function(cds,factor_name, start_bin){
+  cell_ids = which(colData(cds)[,factor_name]==start_bin)
+  closest_vertex <-  cds@principal_graph_aux[["UMAP"]]$pr_graph_cell_proj_closest_vertex
+  summary(closest_vertex)
+  closest_vertex <- as.matrix(closest_vertex[colnames(cds), ])
+  root_pr_nodes <- igraph::V(principal_graph(cds)[["UMAP"]])$name[as.numeric(names
+    (which.max(table(closest_vertex[cell_ids,]))))]
+return(root_pr_nodes)
+}
+pick_root_node(cds, "time","day0")
+pick_root_node(cds, "time","day1")
+pick_root_node(cds, "time","day3")
+```
+
+
+## Starting from proliferating cells
+
+```{r}
+cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "seurat_clusters", "8"))
+p=plot_cells(cds, color_cells_by = "pseudotime", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="red") + scale_colour_viridis()
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+
+## Adipogenic end point
+```{r}
+cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "seurat_clusters", "4"))
+p=plot_cells(cds, color_cells_by = "pseudotime", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="red") + scale_colour_viridis()
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+```{r trajectory_only}
+p = plot_cells(cds, label_leaves = F, label_branch_points = F, label_roots = F,
+                trajectory_graph_color="black", label_cell_groups = F, cell_size=0,
+            graph_label_size = 5) 
+p
+saveRDS(p, file=here(odir, "white_trajectory_plot.rds"))
+```
+
+
+## Save
+
+```{r}
+cds$raw_pseudotime = pseudotime(cds)
+cds$monocle_pseudotime = scales::rescale(cds$raw_pseudotime, to = c(1, 0)) #rescale from 1 to 0 (cos were tracing backwards from  day3)
+cds$pscondition = "white"
+if (subset_data == FALSE){
+  write.table(colData(cds), here(odir,"white_monocle_pseudotime.tsv"), sep="\t", quote=F)
+} 
+```
+
+# Beige
+
+## Split seurat object
+```{r}
+Idents(dns) = "cond.time"
+table(Idents(dns))
+beige = subset(dns, idents=c("asc.day0", "beige.day1","beige.day3"))
+beige
+```
+
+```{r}
+Idents(beige) = "initial_clusters"
+table(Idents(beige))
+beige$seurat_clusters = beige$initial_clusters
+```
+
+```{r}
+DimPlot(beige, reduction="umap") + scale_colour_manual(values=clusters)
+```
+
+## Convert to monocle object
+```{r warning=FALSE}
+cds = SeuratWrappers::as.cell_data_set(beige)
+cds
+```
+
+```{r}
+p= plot_cells(cds, show_trajectory_graph = F, cell_stroke=0.35, reduction_method = "UMAP", color_cells_by="seurat_clusters") + 
+  scale_colour_manual(values=clusters)
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+
+```{r}
+cds = cluster_cells(cds)
+p= plot_cells(cds, show_trajectory_graph = F, color_cells_by = "partition", label_cell_groups = F)
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+```{r}
+cds = learn_graph(cds, close_loop = F)
+p=plot_cells(cds, color_cells_by = "seurat_clusters",
+           label_leaves=FALSE,
+           label_branch_points=FALSE, cell_stroke=0.35,
+           trajectory_graph_color = "black")+ 
+  scale_colour_manual(values=clusters)
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+
+## Order cells
+
+```{r}
+pick_root_node = function(cds,factor_name, start_bin){
+  cell_ids = which(colData(cds)[,factor_name]==start_bin)
+  closest_vertex <-  cds@principal_graph_aux[["UMAP"]]$pr_graph_cell_proj_closest_vertex
+  summary(closest_vertex)
+  closest_vertex <- as.matrix(closest_vertex[colnames(cds), ])
+  root_pr_nodes <- igraph::V(principal_graph(cds)[["UMAP"]])$name[as.numeric(names
+    (which.max(table(closest_vertex[cell_ids,]))))]
+return(root_pr_nodes)
+}
+pick_root_node(cds, "time","day0")
+pick_root_node(cds, "time","day1")
+pick_root_node(cds, "time","day3")
+```
+
+
+## Adipogenic end point
+```{r}
+cds = order_cells(cds, root_pr_nodes = pick_root_node(cds, "seurat_clusters", "4"))
+p=plot_cells(cds, color_cells_by = "pseudotime", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="red") + scale_colour_viridis()
+p$layers[[1]]$aes_params$colour = 'transparent'
+p
+```
+
+```{r trajectory_only_beige}
+p = plot_cells(cds, label_leaves = F, label_branch_points = F, label_roots = F,
+                trajectory_graph_color="black", label_cell_groups = F, cell_size=0,
+            graph_label_size = 5) 
+p
+saveRDS(p, file=here(odir, "beige_trajectory_plot.rds"))
+```
+## Save
+
+```{r}
+cds$raw_pseudotime = pseudotime(cds)
+cds$monocle_pseudotime = scales::rescale(cds$raw_pseudotime, to = c(1, 0)) #rescale from 1 to 0 (cos were tracing backwards from  day3)
+cds$pscondition = "beige"
+if (subset_data == FALSE){
+  write.table(colData(cds), here(odir,"beige_monocle_pseudotime.tsv"), sep="\t", quote=F)
+} 
+```

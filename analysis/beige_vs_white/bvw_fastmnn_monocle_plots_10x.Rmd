@@ -1,0 +1,209 @@
+---
+title: "bvw_fastmnn_monocle_plots_10x"
+author: "Sarah Hazell Pickering"
+date: "2026-02-16"
+output: html_document
+---
+
+
+
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(Seurat)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggbeeswarm)
+library(here)
+library(viridis)
+```
+
+# setup
+```{r params}
+module = "beige_vs_white"
+method_name = "fastmnn"
+dataname = paste0("bvw_",method_name)
+load_data = T #loading data
+subset_data = F
+
+rmd_filename = "bvw_fastmnn_monocle_plots_10x"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname) 
+```
+
+```{r setup}
+set.seed(8)
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal_white = c("#B3B3B3","#85C2EA","#1F78B4")
+names(pal_white) = c("day0","day1","day3")
+prog_cols = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00")
+prog_levels = c("p5","p4","p6","p3","p0","p1","p2")
+names(prog_cols) = paste0("p", 0:(length(prog_levels)-1))
+clusters = MetBrewer::met.brewer("Redon", 12)
+names(clusters) = 0:11
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+## load pseudotime from subsets
+
+write with copilot:
+input file pattern : 
+
+```{r}
+dir_list = grep("/subset_", list.dirs(odir), value=T) # 12 subsets with random numbers
+pscond_list = c("white", "beige")
+
+# Setup lists to populate
+white_list = list()
+beige_list = list()
+
+for (subset_dir in dir_list){
+    subset_no = gsub(".*/subset_", "", subset_dir)
+    
+    # Read white data
+    white_data = read.delim(file.path(subset_dir, "white_monocle_pseudotime.tsv"))
+    white_data = white_data %>%
+        tibble::rownames_to_column("cell_id") %>%
+        mutate(subset_no = subset_no) %>%
+        select(cell_id, pscondition, subset_no, raw_pseudotime, monocle_pseudotime)
+    white_list[[subset_no]] = white_data
+    
+    # Read beige data
+    beige_data = read.delim(file.path(subset_dir, "beige_monocle_pseudotime.tsv"))
+    beige_data = beige_data %>%
+        tibble::rownames_to_column("cell_id") %>%
+        mutate(subset_no = subset_no) %>%
+        select(cell_id, pscondition, subset_no, raw_pseudotime, monocle_pseudotime)
+    beige_list[[subset_no]] = beige_data
+}
+
+# Combine all subsets into final tibbles
+white_meta = bind_rows(white_list)
+beige_meta = bind_rows(beige_list)
+```
+
+
+```{r}
+head(white_meta)
+mc_meta = rbind(white_meta, beige_meta)
+nrow(mc_meta)
+head(mc_meta)
+```
+
+## load seurat 
+```{r}
+if (subset_data){
+  sbs = readRDS(here(odir, "10%_complete_analysis.rds"))
+  Idents(sbs) = "seurat_clusters"
+} else {
+  sbs = readRDS(here(odir,"complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+sbs
+```
+
+```{r}
+merge_mc= merge(mc_meta, sbs@meta.data, by.x="cell_id",by.y="row.names", all.x=T)
+head(merge_mc)
+write.table(merge_mc, here(odir, "subset_summary_monocle_pseudotime.tsv"), row.names=F, sep="\t", quote=F)
+```
+
+
+# Violin plot progenitor colours
+
+```{r}
+ggplot(merge_mc, 
+       aes(x=monocle_pseudotime, y=time.progen_clusters, fill=time.progen_clusters)) + 
+    geom_violin(scale="width") + geom_beeswarm(stat='summary', fun="mean", aes(group=subset_no), cex = 1.5)+
+    scale_fill_manual(values=c(pal_white, prog_cols)) +  
+    coord_cartesian(expand=F) + scale_y_discrete(limits = c("day3","day1", rev(prog_levels))) +
+    labs(x="Monocle pseudotime", title=NULL) + 
+    facet_grid(pscondition~.)
+
+```
+
+
+```{r}
+mean_per_progen_cluster = group_by(merge_mc, subset_no, time.progen_clusters, pscondition) %>% 
+    summarise(mean_pseudotime= mean(monocle_pseudotime))
+head(mean_per_progen_cluster)
+
+ggplot(mean_per_progen_cluster, aes(y=time.progen_clusters, fill=time.progen_clusters))+
+       geom_boxplot( aes(x=mean_pseudotime))+
+    scale_fill_manual(values=c(pal_white, prog_cols)) +  
+    coord_cartesian(expand=F) + scale_y_discrete(limits = c("day3","day1", rev(prog_levels))) +
+    labs(x="Monocle pseudotime", title=NULL) +
+    facet_grid(pscondition~.)
+
+ggplot(mean_per_progen_cluster, aes(y=time.progen_clusters, fill=time.progen_clusters, x=mean_pseudotime))+
+       geom_violin(scale="width", alpha=0.75)+ geom_boxplot(fill="transparent", width=0.4,colour="black") +
+    scale_fill_manual(values=c(pal_white, prog_cols)) +  
+    coord_cartesian(expand=F) + scale_y_discrete(limits = c("day3","day1", rev(prog_levels))) +
+    labs(x="Monocle pseudotime", title=NULL) +
+    facet_grid(pscondition~.)
+```
+
+
+## Ideal plot
+1. load full pseudotime
+2. plot means per progen.cluster derived from downsampling 
+
+```{r}
+meta= read.delim(here(odir, "monocle_pseudotime.tsv"))
+meta$time.progen_clusters = factor(meta$time.progen_clusters )
+meta$initial_clusters = factor(meta$initial_clusters, levels = c(0:11))
+meta$cond.time = factor(meta$cond.time, levels=c("white.day3","white.day1","asc.day0","beige.day1","beige.day3"))
+table(meta$time.progen_clusters)
+table(meta$cond.time)
+```
+
+
+```{r}
+ggplot(meta, 
+       aes(x=monocle_pseudotime, y=time.progen_clusters, fill=time.progen_clusters)) + 
+    geom_violin(scale="width") + 
+    geom_boxplot(data=mean_per_progen_cluster, aes(x=mean_pseudotime), fill="transparent")+
+    scale_fill_manual(values=c(pal_white, prog_cols)) +  
+    coord_cartesian(expand=F) + scale_y_discrete(limits = c("day3","day1", rev(prog_levels))) +
+    labs(x="Monocle pseudotime", title=NULL) + 
+    facet_grid(pscondition~.)
+```
+
+```{r}
+ggplot(mean_per_progen_cluster, 
+       aes(y=time.progen_clusters, fill=time.progen_clusters, x=mean_pseudotime))+
+    geom_violin(data=meta, aes(x=monocle_pseudotime),
+                  fill="grey50",scale="width") +
+       geom_violin(scale="width", alpha=0.75, width=0.5)+ geom_boxplot(fill="transparent", width=0.4,colour="black") +
+    scale_fill_manual(values=c(pal_white, prog_cols)) +  
+    coord_cartesian(expand=F, x=c(0,0.99)) + 
+    scale_y_discrete(limits = c("day3","day1", rev(prog_levels))) +
+    labs(x="Monocle pseudotime", title=NULL)+ 
+    facet_grid(pscondition~.)
+
+ggplot(mean_per_progen_cluster, aes(y=time.progen_clusters, fill=time.progen_clusters, x=mean_pseudotime))+
+    geom_violin(data=filter(meta, condition %in% c("asc","white")), aes(x=monocle_pseudotime),
+                  fill="grey50",scale="width") + 
+    geom_boxplot( colour="black", alpha=0.5) +
+    scale_fill_manual(values=c(pal_white, prog_cols)) +  
+    coord_cartesian(expand=F) + scale_y_discrete(limits = c("day3","day1", rev(prog_levels))) +
+    labs(x="Monocle pseudotime", title=NULL, fill = "Average pseudotime") + 
+    facet_grid(pscondition~.)
+```
+
+Could add a fill to the legend - pseudotime time from 1 full run (white)
+Dunno why beige day1 and day3 don't have an underlying grey violin plot

@@ -14,11 +14,11 @@ library(here)
 ```{r params}
 module = "beige_vs_white"
 method_name = "fastmnn"
-dataname = paste0("bvw_",method_name)
+dataname = paste0("tss_",method_name)
 load_data = T #loading data
 subset_data = F
 
-rmd_filename = "bvw_fastmnn_monocle_umap_plots"
+rmd_filename = "tss_fastmnn_monocle_umap_plots"
 i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
 odir = here("output", module, dataname)
 ```
@@ -26,8 +26,18 @@ odir = here("output", module, dataname)
 ```{r}
 g2g = read.table(here(odir, "g2g_alignment_genes.tsv"), header = T)
 head(g2g, n=20)
-
 ```
+
+
+```{r}
+ggplot(g2g, aes(x=l2fc, y=alignment_similarity_percentage)) + geom_point() +
+    geom_text_repel(data=filter(g2g, !grepl("^D|,", Gene) &
+                                    (alignment_similarity_percentage <=0.5 | 
+                                          (abs_l2fc > 0.1 & alignment_similarity_percentage < 1))
+                                    ),
+                    aes(label=gsub("P:","",Gene)))
+```
+
 
 ```{r}
 summary(g2g)
