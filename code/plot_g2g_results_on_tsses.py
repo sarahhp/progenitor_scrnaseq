@@ -42,9 +42,9 @@ genes=[
  #"P:r1@TSPAN19", "P:r3@PEMT", "P:r1@PEMT",
  "P:r1@PLIN1", #"P:r1@ICAM1", "P:r1@PM20D1",
  "P:r1@MGP", #"P:r1@FABP4", "P:r1@FABP3",
- "P:r1@LPL", #"P:r1@PCK1", "P:r1@ACTA2",
+ "P:r1@LPL", "P:r1@PCK1", "P:r1@ACTA2",
  "P:r1@TAGLN", "P:r1@PHLDA1",# "P:r3@CD36",
- #"P:r6@CD36", "P:r1@CD36", "P:r2@CD36",
+ "P:r1@CD36"  #"P:r6@CD36","P:r2@CD36",
  #"P:r1@CXCL8", "P:r1@ITPKA", "P:r1@FPR2",
  #"P:r1@AGXT", "P:r1@CA4", "P:r1@MMP7",
  #"P:r1@HIST1H2BI", "P:r1@DIO2"
@@ -71,7 +71,7 @@ for gene in genes:
         left_ax.set_ylabel("TSS expression")
         
         #change colours
-        colors = ["#FF7F00", "#1F78B4"]
+        colors = ["#1F78B4","#FF7F00"]
         
         for line, col in zip(left_ax.lines, colors):
             line.set_color(col)
@@ -80,10 +80,8 @@ for gene in genes:
         for coll, col in zip(scatters, colors):
             alpha = coll.get_alpha() or 1.0 #keep previous alpha
             coll.set_facecolor(mcolors.to_rgba(col, alpha))
-
-        with open("{}/{}_alignment_fig.pkl".format(fig_path, gene), 'wb') as file:
-            pickle.dump(plt.gcf(), file)
-        plt.savefig("{}/{}_alignment.png".format(fig_path, gene), format="png", dpi=300, bbox_inches="tight")
+        for device in ["png","pdf"]:
+            plt.savefig("{}/{}_alignment.{}".format(fig_path, gene, device), format=device, dpi=300, bbox_inches="tight")
         plt.close() 
 
 ## Open and process anndata files

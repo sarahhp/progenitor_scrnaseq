@@ -111,6 +111,15 @@ ggsave(here(fig_dir, "wvb_violin_with_variance.png"), width = 9, height = 8)
 ```
 
 
+## B: G2G trajectory comparison
+```{r}
+g2g_dataname =  paste0(dataname , "_g2g")
+fig_indir = here("analysis", module, "figures", g2g_dataname)
+
+```
+
+![mgp](`r here(fig_indir, "P:r1@MGP_alignment.png")`)
+
 # Beige vs white
 
 ```{r bvw_setup}
@@ -150,7 +159,7 @@ table(monocleb$time.progen_clusters)
 
 ## Bvw Violin Plots
 
-```{r paired_ridge_plot}
+```{r paired_ridge_plot1}
 VlnPlot(merged_obj, features = "monocle_pseudotime", group.by = "initial_clusters", split.by="pscondition",
         cols= c("#FF7F00",  "#1F78B4"), pt.size = 0, split.plot = T) + coord_flip(expand=F) +
   scale_x_discrete(limits = rev(cluster_levels) )+
@@ -249,7 +258,7 @@ ggplot(bvwmeta, aes(x=monocle_pseudotime, fill=time)) + geom_density(alpha=0.5) 
 
 
 ## TSS level trajectories
-```{r tss_setup}
+```{r tss_setup2}
 module = "beige_vs_white"
 dataname="tss_fastmnn"
 odir = here("output", module, dataname)
