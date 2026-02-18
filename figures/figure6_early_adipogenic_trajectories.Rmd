@@ -113,7 +113,7 @@ ggplot(mean_per_cluster, aes(y=initial_clusters, fill=pscondition, x=mean_pseudo
                        guide=guide_legend(reverse=T)) +
     scale_colour_manual(values="black", name="Average\npseudotime") +
     coord_cartesian(expand=F) + scale_y_discrete(limits = rev(cluster_levels),
-                                                 label=function(x)paste0("b",x)) +
+                                                 label=function(x)paste0("t",x)) +
     labs(x="Monocle pseudotime", title=NULL, y="TSS clusters") 
 ggsave(here(fig_dir, "wvb_violin_with_variance.png"), width = 9, height = 8)
 ```
