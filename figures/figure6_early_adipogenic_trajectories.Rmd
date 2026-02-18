@@ -103,7 +103,7 @@ table(mean_per_cluster$subset_no)
 
 
 ##A: White vs beige violin
-```{r}
+```{r Awvb_violin}
 mean_per_cluster$cluster.pscond = paste(mean_per_cluster$initial_clusters, sep=".",mean_per_cluster$pscondition)
 ggplot(mean_per_cluster, aes(y=initial_clusters, fill=pscondition, x=mean_pseudotime))+
     geom_violin(data=meta, aes(x=monocle_pseudotime),scale="width") + 
@@ -177,7 +177,7 @@ p$layers[[1]]$aes_params$colour = 'transparent'
 p
 ```
 
-```{r}
+```{r Cmonocle_split}
 filt = monoclew[, colData(monoclew)$time.progen_clusters %in% c(paste0("p", 0:6), "day1")]
 p=plot_cells(filt, color_cells_by = "time.progen_clusters", label_leaves = F, label_branch_points = F, 
                 trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.25,
@@ -214,20 +214,7 @@ dim(grid.df)
 if (subset_data){pt_size=1} else{pt_size=0.2}
 ```
 
-
-```{r}
-plotReducedDim(sce, "UMAP",colour_by="initial_clusters", point_size=pt_size) +
-    geom_segment(data=grid.df, mapping=aes(x=start.V1, y=start.V2, 
-        xend=end.V1, yend=end.V2, colour=NULL),arrow=arrow(length=unit(0.05, "inches"))) +
-  scale_colour_manual(values=clusters)
-
-plotReducedDim(sce, "UMAP",colour_by="time", point_size=pt_size) +
-    geom_segment(data=grid.df, mapping=aes(x=start.V1, y=start.V2, 
-        xend=end.V1, yend=end.V2, colour=NULL),arrow=arrow(length=unit(0.05, "inches"))) +
-  scale_colour_manual(values=pal_white)
-```
-
-```{r}
+```{r D_RNAvelocity}
 options(ggrastr.default.dpi=600)
 plotReducedDim(sce, "UMAP",colour_by="time.progen_clusters", point_size=pt_size,rasterise=T) +
     geom_segment(data=grid.df, mapping=aes(x=start.V1, y=start.V2, 
@@ -236,18 +223,45 @@ plotReducedDim(sce, "UMAP",colour_by="time.progen_clusters", point_size=pt_size,
   scale_colour_manual(values=c(prog_cols, pal_white))
 ```
 
-## F:Progenitor colours Violin plot
+
+## E:Progenitor colours Violin plot
+```{r}
+dns_meta = read.delim(here(odir, "subset_summary_monocle_pseudotime.tsv"))
+table(dns_meta$orig.ident)
+mean_per_cluster = group_by(dns_meta, subset_no, time.progen_clusters, pscondition) %>% 
+    summarise(mean_pseudotime= mean(monocle_pseudotime)) %>% 
+    mutate(time.progen_clusters = factor(time.progen_clusters, 
+                                         levels=c(names(prog_cols), names(pal_white))))
+head(mean_per_cluster)
+table(mean_per_cluster$subset_no)
+```
 
 
-```{r Cbvw_prog_cols_paired_ridge_plot}
+```{r Ebvw_prog_cols}
 ps_cols = c(prog_cols, pal[1:2])
 names(ps_cols) = c(names(prog_cols), "day1","day3")
 ggplot(filter(meta, sample_or_progen_cluster != "day0"), 
        aes(x=monocle_pseudotime, y=time.progen_clusters, fill=time.progen_clusters)) + 
-    geom_violin(scale="width")+
-  facet_grid(pscondition~.) + scale_fill_manual(values=ps_cols, name="identity", limits = names(ps_cols)) + 
+    geom_violin(scale="width")+ geom_boxplot(data=mean_per_cluster, aes(x=mean_pseudotime), fill="transparent", colour="black") +
+  #facet_grid(pscondition~.) + 
+    scale_fill_manual(values=ps_cols, name="identity", limits = names(ps_cols)) + 
   scale_y_discrete(limits=c(paste0("day",c(3,1)), rev(prog_levels))) + coord_cartesian(expand=F) +
     labs(y="Time // Progenitor cluster", x="Monocle pseudotime", title=NULL)
+```
+
+## F Velocity violin plot
+
+```{r}
+velo_info = as_tibble(colData(sce))
+head(velo_info)
+ggplot(filter(velo_info, time.progen_clusters != "day0"), 
+       aes(x=velocity_pseudotime, y=time.progen_clusters, fill=time.progen_clusters)) + 
+    geom_violin(scale="width")+ 
+  #facet_grid(pscondition~.) + 
+    scale_fill_manual(values=ps_cols, name="identity", limits = names(ps_cols)) + 
+  scale_y_discrete(limits=c(paste0("day",c(3,1)), rev(prog_levels))) + coord_cartesian(expand=F) +
+    labs(y="Time // Progenitor cluster", x="Velocity pseudotime", title=NULL)
+
 ```
 
 

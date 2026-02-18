@@ -78,8 +78,9 @@ sbs
 Idents(sbs) = "time"
 table(Idents(sbs))
 sbs = subset(sbs, downsample=7265)
-sbs = FindVariableFeatures(sbs)
+sbs = FindVariableFeatures(sbs, nfeatures=4000)
 variable.genes = VariableFeatures(sbs)
+sbs = subset(sbs, downsample=3300, seed = 8)
 Idents(sbs) = "initial_clusters"
 ```
 
