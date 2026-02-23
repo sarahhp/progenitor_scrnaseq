@@ -101,9 +101,30 @@ head(mean_per_cluster)
 table(mean_per_cluster$subset_no)
 ```
 
+```{r}
+monoclew = readRDS(here(odir,"white_monocle_complete_analysis_umap.rds"))
+table(monoclew$time.progen_clusters)
+```
 
-##A: White vs beige violin
-```{r Awvb_violin}
+
+## A: UMAP TSS clusters
+
+
+
+```{r Aumap_tss}
+
+p=plot_cells(monoclew, color_cells_by = "initial_clusters", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.75,  alpha = 0.5,
+             graph_label_size = 5)+ theme_hp +
+    scale_colour_manual(values=clusters, name="TSS clusters", labels=function(x)paste0("t",x))  +
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size=3)))
+p$layers[[1]]$aes_params$colour = 'transparent' 
+p
+```
+
+
+##B: White vs beige violin
+```{r Bwvb_violin}
 mean_per_cluster$cluster.pscond = paste(mean_per_cluster$initial_clusters, sep=".",mean_per_cluster$pscondition)
 ggplot(mean_per_cluster, aes(y=initial_clusters, fill=pscondition, x=mean_pseudotime))+
     geom_violin(data=meta, aes(x=monocle_pseudotime),scale="width") + 
@@ -119,7 +140,7 @@ ggsave(here(fig_dir, "wvb_violin_with_variance.png"), width = 9, height = 8)
 ```
 
 
-## B: G2G trajectory comparison
+## C: G2G trajectory comparison
 ```{r}
 g2g_dataname =  paste0(dataname , "_g2g")
 ```
@@ -164,9 +185,9 @@ monoclew$progen_clusters = paste0("p", monoclew$progen_clusters)
 table(monoclew$time.progen_clusters)
 ```
 
-## C: Monocle UMAP
+## D: Monocle UMAP
 
-```{r Cprogenitor_colours}
+```{r Dprogenitor_colours}
 
 p=plot_cells(monoclew, color_cells_by = "time.progen_clusters", label_leaves = F, label_branch_points = F, 
                 trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.75,  alpha = 0.25,
@@ -177,7 +198,7 @@ p$layers[[1]]$aes_params$colour = 'transparent'
 p
 ```
 
-```{r Cmonocle_split}
+```{r Dmonocle_split}
 filt = monoclew[, colData(monoclew)$time.progen_clusters %in% c(paste0("p", 0:6), "day1")]
 p=plot_cells(filt, color_cells_by = "time.progen_clusters", label_leaves = F, label_branch_points = F, 
                 trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.25,
@@ -191,10 +212,10 @@ p
 ```
 
 ```{r}
-rm(monocleb)
+rm(monoclew)
 ```
 
-## D: RNA velocity
+## E: RNA velocity
 ```{r}
 velo = readRDS(here(odir, "dynamical_velocity_output.rds"))
 sce = readRDS(here(odir, "dynamical_velocity_scexperiment.rds"))
@@ -214,7 +235,7 @@ dim(grid.df)
 if (subset_data){pt_size=1} else{pt_size=0.2}
 ```
 
-```{r D_RNAvelocity}
+```{r E_RNAvelocity}
 options(ggrastr.default.dpi=600)
 plotReducedDim(sce, "UMAP",colour_by="time.progen_clusters", point_size=pt_size,rasterise=T) +
     geom_segment(data=grid.df, mapping=aes(x=start.V1, y=start.V2, 
@@ -222,9 +243,30 @@ plotReducedDim(sce, "UMAP",colour_by="time.progen_clusters", point_size=pt_size,
         ) +theme_hp+
   scale_colour_manual(values=c(prog_cols, pal_white))
 ```
+### Supp Separate the prog colours
+
+```{r velo_split}
+for (i in c(paste0("p",0:6),"day1","day3")){
+    cat("\nSubsetting ",i,"\n")
+    sbs_embeding = embedded[colData(sce)$time.progen_clusters == i,]
+    sbs_sce = sce[,colData(sce)$time.progen_clusters == i]
+    if (i %in% c("p4","p5")){resolution = 5}
+    if (i %in% c("day1", "day3")){resolution = 30
+    } else resolution = 15
+    grid.df <- gridVectors(sbs_sce,
+                           sbs_embeding, use.dimred = "UMAP", resolution=resolution)
+    p= plotReducedDim(sce, "UMAP",colour_by="time.progen_clusters", point_size=1,rasterise=T) +
+        geom_segment(data=grid.df, mapping=aes(x=start.V1, y=start.V2, 
+            xend=end.V1, yend=end.V2, colour=NULL), arrow=arrow(length=unit(0.05, "inches")),
+            ) +theme_hp+
+      scale_colour_manual(values=c(prog_cols, pal_white))
+    print(p)
+
+}
+```
 
 
-## E:Progenitor colours Violin plot
+## F:Progenitor colours Violin plot
 ```{r}
 dns_meta = read.delim(here(odir, "subset_summary_monocle_pseudotime.tsv"))
 table(dns_meta$orig.ident)
@@ -237,7 +279,7 @@ table(mean_per_cluster$subset_no)
 ```
 
 
-```{r Ebvw_prog_cols}
+```{r Fbvw_prog_cols}
 ps_cols = c(prog_cols, pal[1:2])
 names(ps_cols) = c(names(prog_cols), "day1","day3")
 ggplot(filter(meta, sample_or_progen_cluster != "day0"), 
@@ -249,9 +291,9 @@ ggplot(filter(meta, sample_or_progen_cluster != "day0"),
     labs(y="Time // Progenitor cluster", x="Monocle pseudotime", title=NULL)
 ```
 
-## F Velocity violin plot
+## G Velocity violin plot
 
-```{r}
+```{r Gvelo_violin}
 velo_info = as_tibble(colData(sce))
 head(velo_info)
 ggplot(filter(velo_info, time.progen_clusters != "day0"), 
