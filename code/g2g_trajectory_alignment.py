@@ -96,12 +96,13 @@ wout = os.path.join(fig_path,"white")
 os.makedirs(wout, exist_ok=True)
 for factor in to_plot.keys():
     g2g_barplot(adata_ref, n_bins, factor, to_plot[factor], fig_path=wout)
+    g2g_barplot(adata_ref, n_bins, factor, to_plot[factor], fig_path=wout, device="pdf")
 
 bout = os.path.join(fig_path,"beige")
 os.makedirs(bout, exist_ok=True)
 for factor in to_plot.keys():
     g2g_barplot(adata_query, n_bins, factor, to_plot[factor], fig_path=bout)
-
+    g2g_barplot(adata_ref, n_bins, factor, to_plot[factor], fig_path=wout, device="pdf")
 
 ### Run G2G alignment 
 aligner = Main.RefQueryAligner(adata_ref, adata_query, gene_list, n_bins) #

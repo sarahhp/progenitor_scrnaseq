@@ -23,7 +23,7 @@ library(viridis)
 ```{r params}
 module = "beige_vs_white"
 method_name = "fastmnn"
-dataname = paste0("tss_",method_name)
+dataname = paste0("bvw_",method_name)
 load_data = T #loading data
 subset_data = F
 
@@ -34,7 +34,7 @@ if (exists("snakemake")){
 )
 print(seed)
 
-rmd_filename = "tss_fastmnn_monocle_umap"
+rmd_filename = "bvw_fastmnn_monocle_umap"
 i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
 indir = here("output", module, dataname) 
 odir =  here(indir,paste0("subset_", seed))

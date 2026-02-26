@@ -593,22 +593,30 @@ rule bvw_velocity:
     '''Status:  Knitted'''
     input:
         rdata = ODIR + "/complete_analysis.rds",
-        rmd = ADIR + "/bvw_fastmnn_velociraptor_dynamical_{cond}.Rmd"
+        rmd = ADIR + "/bvw_fastmnn_velociraptor_dynamical.Rmd"
     output:
-        velo = ODIR + "/dynamical_velocity_output_{cond}.rds",
-        vdata = ODIR + "/dynamical_velocity_scexperiment_{cond}.rds",
-        report = ADIR + "/bvw_fastmnn_velociraptor_dynamical_{cond}.html",
+        velo = ODIR + "/dynamical_velocity_output.rds",
+        vdata = ODIR + "/dynamical_velocity_scexperiment.rds",
+        report = ADIR + "/bvw_fastmnn_velociraptor_dynamical.html",
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
         "{params.cmd}" 
 
+EARLY = ODIR + "_early"
+use rule bvw_velocity as bvw_velocity_early with:
+    input:
+        rmd = ADIR + "/bvw_fastmnn_velociraptor_dynamical_early_focus.Rmd"
+    output:
+        velo = EARLY + "/dynamical_velocity_output.rds",
+        vdata = EARLY + "/dynamical_velocity_scexperiment.rds",
+        report = ADIR + "/bvw_fastmnn_velociraptor_dynamical_early_focus.html",
+    
+
 rule combine_pseudotime:
     input:
         monocle = expand(ODIR + "/{cond}_monocle_complete_analysis_umap.rds",
                             cond = ["white","beige"]),
-        vdata= expand(ODIR + "/dynamical_velocity_scexperiment_{cond}.rds",
-                    cond = ["white","beige"]),
         rmd = ADIR + "/bvw_fastmnn_combine_pseudotime.Rmd"
     output:
         txt = ODIR + "/combined_pseudotime.tsv",
@@ -823,14 +831,15 @@ use rule tss_monocle_plots as bvw_monocle_plots with:
 
 rule figure6:
     input:
-        beige = ODIR + "/beige_monocle_complete_analysis_umap.rds", #A&B Trajectory TSSs
+        beige = expand( "{dir}/{condition}_monocle_complete_analysis_umap.rds",
+                        dir = ODIR, condition =["beige","white"]), #A Trajectory TSSs
         pseudotime = ODIR + "/monocle_pseudotime.tsv", #C Violins
         rmd = "figures/figure6_early_adipogenic_trajectories.Rmd",
         gwhite = BVW_DIR + "/white_monocle_complete_analysis_umap.rds", #F? or D
         gbeige = BVW_DIR + "/beige_monocle_complete_analysis_umap.rds",
         gpseudotime = BVW_DIR + "/monocle_pseudotime.tsv",
-        psdata = expand(BVW_DIR + "/{cond}_combined_pseudotime_seurat.rds",
-                        cond = ["white","beige"])
+        velo = BVW_DIR + "/dynamical_velocity_output.rds",
+        vdata = EARLY + "/dynamical_velocity_scexperiment.rds",
     output:
         report = "figures/figure6_early_adipogenic_trajectories.html"
     params:

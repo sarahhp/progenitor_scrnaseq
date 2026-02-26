@@ -103,17 +103,15 @@ table(mean_per_cluster$subset_no)
 
 ```{r}
 monoclew = readRDS(here(odir,"white_monocle_complete_analysis_umap.rds"))
+monocleb = readRDS(here(odir,"beige_monocle_complete_analysis_umap.rds"))
 table(monoclew$time.progen_clusters)
 ```
 
 
 ## A: UMAP TSS clusters
 
-
-
-```{r Aumap_tss}
-
-p=plot_cells(monoclew, color_cells_by = "initial_clusters", label_leaves = F, label_branch_points = F, 
+```{r Aumap_beige}
+p=plot_cells(monocleb, color_cells_by = "initial_clusters", label_leaves = F, label_branch_points = F, 
                 trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.75,  alpha = 0.5,
              graph_label_size = 5)+ theme_hp +
     scale_colour_manual(values=clusters, name="TSS clusters", labels=function(x)paste0("t",x))  +
@@ -123,7 +121,19 @@ p
 ```
 
 
-##B: White vs beige violin
+```{r Aumap_white}
+p=plot_cells(monoclew, color_cells_by = "initial_clusters", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.75,  alpha = 0.5,
+             graph_label_size = 5)+ theme_hp +
+    scale_colour_manual(values=clusters, name="TSS clusters", labels=function(x)paste0("t",x))  +
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size=3)))
+p$layers[[1]]$aes_params$colour = 'transparent' 
+p
+
+```
+
+
+## B: White vs beige violin
 ```{r Bwvb_violin}
 mean_per_cluster$cluster.pscond = paste(mean_per_cluster$initial_clusters, sep=".",mean_per_cluster$pscondition)
 ggplot(mean_per_cluster, aes(y=initial_clusters, fill=pscondition, x=mean_pseudotime))+
@@ -146,10 +156,7 @@ g2g_dataname =  paste0(dataname , "_g2g")
 ```
 
 ![tagln](`r here(fig_dir,g2g_dataname, "P:r1@TAGLN_alignment.png")`)
-![phlda1](`r here(fig_dir,g2g_dataname, "P:r1@PHLDA1_alignment.png")`)
 ![plin1](`r here(fig_dir,g2g_dataname, "P:r1@PLIN1_alignment.png")`)
-
-![supp - mgp](`r here(fig_dir,g2g_dataname, "P:r1@MGP_alignment.png")`)
 
 
 # Beige vs white
@@ -237,12 +244,52 @@ if (subset_data){pt_size=1} else{pt_size=0.2}
 
 ```{r E_RNAvelocity}
 options(ggrastr.default.dpi=600)
-plotReducedDim(sce, "UMAP",colour_by="time.progen_clusters", point_size=pt_size,rasterise=T) +
+plotReducedDim(sce, "UMAP",colour_by="time.progen_clusters", point_size=1,rasterise=T, order_by = "time.progen_clusters") +
     geom_segment(data=grid.df, mapping=aes(x=start.V1, y=start.V2, 
         xend=end.V1, yend=end.V2, colour=NULL), arrow=arrow(length=unit(0.05, "inches")),
         ) +theme_hp+
   scale_colour_manual(values=c(prog_cols, pal_white))
 ```
+
+
+```{r}
+plotReducedDim(sce, "UMAP",colour_by="initial_clusters", point_size=1,rasterise=T, order_by="initial_clusters") +
+    geom_segment(data=grid.df, mapping=aes(x=start.V1, y=start.V2, 
+        xend=end.V1, yend=end.V2, colour=NULL), arrow=arrow(length=unit(0.05, "inches")),
+        ) +theme_hp+
+     scale_colour_manual(values=clusters)
+```
+
+```{r}
+for (l in 1:12){
+    one_cluster = rep("grey", 12)
+    one_cluster[l] = clusters[l]
+    p = plotReducedDim(sce, "UMAP",colour_by="initial_clusters", point_size=1,rasterise=T) +
+    geom_segment(data=grid.df, mapping=aes(x=start.V1, y=start.V2, 
+        xend=end.V1, yend=end.V2, colour=NULL), arrow=arrow(length=unit(0.05, "inches")),
+        ) +theme_hp+
+     scale_colour_manual(values=one_cluster) 
+    print(p)
+}
+
+```
+
+```{r}
+plotVelocityStream(sce, embedded, use.dimred="UMAP", 
+                   color_by = "initial_clusters",grid.resolution=30,
+                   stream.L = 6,
+                   arrow.angle = 20, arrow.length = 0.5, color.alpha=0.5) + 
+    scale_colour_manual(values=clusters)
+
+plotVelocityStream(sce, embedded, use.dimred="UMAP", 
+                   color_by = "time.progen_clusters",grid.resolution=30,
+                   stream.L = 6,
+                   arrow.angle = 20, arrow.length = 0.5, color.alpha=0.5) + 
+    scale_colour_manual(values=ps_cols)
+```
+
+
+
 ### Supp Separate the prog colours
 
 ```{r velo_split}

@@ -5,7 +5,7 @@ date: "2026-02-16"
 output: html_document
 ---
 
-## Setup
+# Setup
 
 ```{r libs, message=FALSE, warning=FALSE}
 library(BPCells)
@@ -47,7 +47,7 @@ names(pal) =  c("white.day3","white.day1","day0", "beige.day1","beige.day3")
 prog_cols = c("#DA1819","#691A93","#EBB400" , "#434D51","#00AED1","#3AAD00","#FF7F00")
 prog_levels = c("p5","p4","p6","p3","p0","p1","p2")
 names(prog_cols) = paste0("p", 0:(length(prog_levels)-1))
-ps_cols = c(prog_cols, pal[2:1])
+ps_cols = c(prog_cols, pal[1:2])
 names(ps_cols) = c(names(prog_cols),"day1","day3")
 ```
 
@@ -69,6 +69,16 @@ meta$cond.time = factor(meta$cond.time, levels=c("white.day3","white.day1","asc.
 table(meta$initial_clusters)
 table(meta$cond.time)
 ```
+
+### Monocle trajectories
+```{r}
+monoclew = readRDS(here(odir,"white_monocle_complete_analysis_umap.rds"))
+monocleb = readRDS(here(odir,"beige_monocle_complete_analysis_umap.rds"))
+monocleb$progen_clusters = paste0("p", monocleb$progen_clusters)
+table(monocleb$time.progen_clusters)
+```
+
+
 ### Subset summary
 Ran monocle trajectory analysis 12x on random subsamples of the data (3300 cells per condition)
 
@@ -87,26 +97,65 @@ trial = readRDS(here(indir, "complete_analysis.rds"))
 trial
 ```
 
-##A: integration methods summary
+## A: integration methods summary
 Just umaps with initial clusters. 
-```{r}
-DimPlot(trial, reduction = "umap.rpca", group.by = "initial_clusters", raster = T) + 
+```{r A_integration_trial_clusters}
+DimPlot(trial, reduction = "umap.rpca", group.by = "initial_clusters", raster = T, pt.size = 2, alpha=0.5) + 
     scale_colour_manual(values = clusters, name="Beige vs white\nclusters", labels=function(x) paste0("b",x)) +
     ggtitle(NULL) + theme_hp
-DimPlot(trial, reduction = "umap.harmony",group.by = "initial_clusters", raster = T) + 
+DimPlot(trial, reduction = "umap.harmony",group.by = "initial_clusters", raster = T, pt.size = 2, alpha=0.5) + 
     scale_colour_manual(values = clusters, name="Beige vs white\nclusters", labels=function(x) paste0("b",x)) +
     ggtitle(NULL) + theme_hp
-DimPlot(trial, reduction = "umap.fastmnn",group.by = "initial_clusters", raster = T) + 
+DimPlot(trial, reduction = "umap.fastmnn",group.by = "initial_clusters", raster = T, pt.size = 2, alpha=0.5) + 
     scale_colour_manual(values = clusters, name="Beige vs white\nclusters", labels=function(x) paste0("b",x)) +
     ggtitle(NULL) + theme_hp
 ```
+
+
+```{r A_integration_trial_cond.time}
+DimPlot(trial, reduction = "umap.rpca",group.by = "cond.time", raster = T, pt.size = 2, alpha=0.5) + 
+        scale_colour_manual(values = pal) +
+    ggtitle(NULL) + theme_hp
+DimPlot(trial, reduction = "umap.harmony",group.by = "cond.time", raster = T, pt.size = 2, alpha=0.5) + 
+        scale_colour_manual(values = pal) +
+    ggtitle(NULL) + theme_hp
+DimPlot(trial, reduction = "umap.fastmnn",group.by = "cond.time", raster = T, pt.size = 2, alpha=0.5) + 
+        scale_colour_manual(values = pal) +
+    ggtitle(NULL) + theme_hp
+```
+
+
+
 ```{r}
 rm(trial)
 ```
 
+## B: Monocle UMAPs
+```{r B_white_monocle_umap}
+p=plot_cells(monoclew, color_cells_by = "initial_clusters", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.75,  alpha = 0.5,
+             graph_label_size = 5)+ theme_hp +
+    scale_colour_manual(values=clusters, name="BvW clusters")  +
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size=3)))
+p$layers[[1]]$aes_params$colour = 'transparent' 
+p
+```
 
-##B: White vs beige violin
-```{r}
+
+```{r B_beige_monocle_umao}
+p=plot_cells(monocleb, color_cells_by = "initial_clusters", label_leaves = F, label_branch_points = F, 
+                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.75,  alpha = 0.5,
+             graph_label_size = 5)+ theme_hp +
+    scale_colour_manual(values=clusters, name="BvW clusters")  +
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size=3)))
+p$layers[[1]]$aes_params$colour = 'transparent' 
+p
+```
+
+
+
+## C: White vs beige violin
+```{r C_wvb_violin}
 mean_per_cluster$cluster.pscond = paste(mean_per_cluster$initial_clusters, sep=".",mean_per_cluster$pscondition)
 ggplot(mean_per_cluster, aes(y=initial_clusters, fill=pscondition, x=mean_pseudotime))+
     geom_violin(data=meta, aes(x=monocle_pseudotime),scale="width") + 
@@ -115,34 +164,33 @@ ggplot(mean_per_cluster, aes(y=initial_clusters, fill=pscondition, x=mean_pseudo
      scale_fill_manual(values=c("#FF7F00","#1F78B4"), name="Pseudotime\ncalculated on",
                        guide=guide_legend(reverse=T)) +
     scale_colour_manual(values="black", name="Average\npseudotime") +
-    coord_cartesian(expand=F) + scale_y_discrete(limits = rev(cluster_levels),
-                                                 label=function(x)paste0("t",x)) +
+    coord_cartesian(expand=F) + 
+    scale_y_discrete(limits = rev(cluster_levels),label=function(x)paste0("b",x)) +
     labs(x="Monocle pseudotime", title=NULL, y="Beige vs white clusters") 
 ggsave(here(fig_dir, "wvb_violin_with_variance.png"), width = 9, height = 8)
 ```
 
-## C: g2g trajectory comparsion (genes)
-
+## D: g2g trajectory comparsion (genes)
+Original figure outdir: analysis/beige_vs_white/figures/bvw_fastmnn_g2g/
 ```{r}
 g2g_dataname =  paste0(dataname , "_g2g")
 ```
+
+![beige](`r here(fig_dir,g2g_dataname, "beige","initial_clusters_barplot.png")`)
+![white](`r here(fig_dir,g2g_dataname, "white","initial_clusters_barplot.png")`)
 
 ![acta2](`r here(fig_dir,g2g_dataname, "ACTA2_alignment.png")`)
 ![mgp](`r here(fig_dir,g2g_dataname, "MGP_alignment.png")`)
 ![pck1](`r here(fig_dir,g2g_dataname, "FASN_alignment.png")`)
 
-## D: Beige trajectory 
+
+
+## E: Beige trajectory  with progen cols
 white trajectory in main
-```{r}
-monocleb = readRDS(here(odir,"beige_monocle_complete_analysis_umap.rds"))
-monocleb$progen_clusters = paste0("p", monocleb$progen_clusters)
-table(monocleb$time.progen_clusters)
-```
 
-
-```{r Dprogenitor_colours}
+```{r Eprogenitor_colours}
 p=plot_cells(monocleb, color_cells_by = "time.progen_clusters", label_leaves = F, label_branch_points = F, 
-                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.75,  alpha = 0.25,
+                trajectory_graph_color="black", label_cell_groups = F,  cell_size=0.75,  alpha = 0.5,
              graph_label_size = 5)+ theme_hp +
     scale_colour_manual(values=ps_cols, name="Progenitor\ncluster\nor time", limits = c(names(prog_cols), "day1", "day3"))  +
     guides(colour = guide_legend(override.aes = list(alpha = 1, size=5)))
