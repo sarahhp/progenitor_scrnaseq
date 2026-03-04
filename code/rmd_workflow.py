@@ -603,14 +603,14 @@ rule bvw_velocity:
     shell:
         "{params.cmd}" 
 
-EARLY = ODIR + "_early"
+EARLY = ODIR + "_equal_time"
 use rule bvw_velocity as bvw_velocity_early with:
     input:
-        rmd = ADIR + "/bvw_fastmnn_velociraptor_dynamical_early_focus.Rmd"
+        rmd = ADIR + "/bvw_fastmnn_velociraptor_dynamical_equal_time.Rmd"
     output:
         velo = EARLY + "/dynamical_velocity_output.rds",
         vdata = EARLY + "/dynamical_velocity_scexperiment.rds",
-        report = ADIR + "/bvw_fastmnn_velociraptor_dynamical_early_focus.html",
+        report = ADIR + "/bvw_fastmnn_velociraptor_dynamical_equal_time.html",
     
 
 rule combine_pseudotime:

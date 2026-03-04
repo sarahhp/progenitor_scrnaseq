@@ -6,6 +6,7 @@ output: html_document
 ---
 
 Running with the read2only UMAPs, but the unspliced/spliced counts from the paired end mode (called count_no_introns). 
+Starting with 4000 variable genes, then filtering based on unspliced and spliced counts.  
 
 ```{r libs, warning=F, message=F, echo=F}
 library(dplyr)
@@ -75,6 +76,7 @@ sbs
 
 
 ```{r downsample_time}
+sbs = FindVariableFeatures(sbs, nfeatures = 4000)
 variable.genes = VariableFeatures(sbs)
 Idents(sbs) = "initial_clusters"
 ```

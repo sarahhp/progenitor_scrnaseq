@@ -7,15 +7,13 @@ output: html_document
 
 # Figure 6
 
-    a. Violin plot of monocle3 pseudotime calculated for separate beige and white trajectories, separated by common clusters (see also Supp S7). 
-    b. Alignment of beige vs white scRNAseq trajectories on key genes (method: g2g alignment on monocle3 pseuodtime)]
-    c. Monocle trajectory with prog cols - white and beige trajectory overlayed
-    d. RNA velocity arrows with prog cols - total analysis. 
-    e. Violin prog colours beige vs white monocle/ RNA velocity / harmony (RNA velocity)
-    f. TSS prog colours
-    g. Supp - Harmony map with prog colours. 
-
-
+    a.UMAPs of beige and white monocle trajectories on TSS data.  
+    b.Violin plot of monocle3 pseudotime calculated for separate beige and white trajectories, separated by common clusters (see also Supp S7). 
+    c. Alignment of beige vs white scRNAseq trajectories on key genes (method: g2g alignment on monocle3 pseuodtime)]
+    d. Monocle trajectory with prog cols - white and beige trajectory overlayed
+    e. RNA velocity arrows with prog cols - total analysis. 
+    f. Violin prog colours beige vs white monocle/ RNA velocity / harmony (RNA velocity)
+    g. TSS prog colours
 
 ## Setup
 
@@ -23,7 +21,6 @@ output: html_document
 library(BPCells)
 library(Seurat)
 library(clusterProfiler)
-library(dplyr)
 library(enrichplot)
 library(ggplot2)
 library(ggrepel)
@@ -31,6 +28,7 @@ library(here)
 library(tidyr)
 library(scater)
 library(velociraptor)
+library(dplyr)
 ```
 
 ```{r global_params}
@@ -244,7 +242,9 @@ if (subset_data){pt_size=1} else{pt_size=0.2}
 
 ```{r E_RNAvelocity}
 options(ggrastr.default.dpi=600)
-plotReducedDim(sce, "UMAP",colour_by="time.progen_clusters", point_size=1,rasterise=T, order_by = "time.progen_clusters") +
+plotReducedDim(sce, "UMAP",colour_by="time.progen_clusters", 
+               rasterise=T, order_by = "time.progen_clusters",
+               point_size=0.2,point_alpha=0.3) +
     geom_segment(data=grid.df, mapping=aes(x=start.V1, y=start.V2, 
         xend=end.V1, yend=end.V2, colour=NULL), arrow=arrow(length=unit(0.05, "inches")),
         ) +theme_hp+
@@ -253,7 +253,7 @@ plotReducedDim(sce, "UMAP",colour_by="time.progen_clusters", point_size=1,raster
 
 
 ```{r}
-plotReducedDim(sce, "UMAP",colour_by="initial_clusters", point_size=1,rasterise=T, order_by="initial_clusters") +
+plotReducedDim(sce, "UMAP",colour_by="initial_clusters", rasterise=T, order_by="initial_clusters",point_size=0.2,point_alpha=0.3) +
     geom_segment(data=grid.df, mapping=aes(x=start.V1, y=start.V2, 
         xend=end.V1, yend=end.V2, colour=NULL), arrow=arrow(length=unit(0.05, "inches")),
         ) +theme_hp+
@@ -264,7 +264,7 @@ plotReducedDim(sce, "UMAP",colour_by="initial_clusters", point_size=1,rasterise=
 for (l in 1:12){
     one_cluster = rep("grey", 12)
     one_cluster[l] = clusters[l]
-    p = plotReducedDim(sce, "UMAP",colour_by="initial_clusters", point_size=1,rasterise=T) +
+    p = plotReducedDim(sce, "UMAP",colour_by="initial_clusters", point_size=0.2,rasterise=T) +
     geom_segment(data=grid.df, mapping=aes(x=start.V1, y=start.V2, 
         xend=end.V1, yend=end.V2, colour=NULL), arrow=arrow(length=unit(0.05, "inches")),
         ) +theme_hp+
@@ -312,6 +312,9 @@ for (i in c(paste0("p",0:6),"day1","day3")){
 }
 ```
 
+```{r}
+rm(velo, embedded, sce)
+```
 
 ## F:Progenitor colours Violin plot
 ```{r}
@@ -329,7 +332,7 @@ table(mean_per_cluster$subset_no)
 ```{r Fbvw_prog_cols}
 ps_cols = c(prog_cols, pal[1:2])
 names(ps_cols) = c(names(prog_cols), "day1","day3")
-ggplot(filter(meta, sample_or_progen_cluster != "day0"), 
+ggplot(filter(meta, time.progen_clusters != "day0"), 
        aes(x=monocle_pseudotime, y=time.progen_clusters, fill=time.progen_clusters)) + 
     geom_violin(scale="width")+ geom_boxplot(data=mean_per_cluster, aes(x=mean_pseudotime), fill="transparent", colour="black") +
   #facet_grid(pscondition~.) + 
@@ -339,6 +342,15 @@ ggplot(filter(meta, sample_or_progen_cluster != "day0"),
 ```
 
 ## G Velocity violin plot
+
+To emphasis the day0-day1 progression we use a higher number of Highly variable genes, and downsample the time points so there's an even number of cells between them.  
+
+```{r}
+dataname = paste0(dataname, "_equal_time")
+odir = here("output", module, dataname)
+sce = readRDS(here(odir, "dynamical_velocity_scexperiment.rds"))
+```
+
 
 ```{r Gvelo_violin}
 velo_info = as_tibble(colData(sce))
