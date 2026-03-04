@@ -846,7 +846,7 @@ rule figure6:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
         "{params.cmd}"        
-
+##To do: add supplemental tables xl creator (Rmd) to snakemake workflwo
 SUPP_FIGS = [
      #"figures/supp_figS1_progenitors_unintegrated.html",
      "figures/supp_figS2_progenitor_integration_trial.html",
