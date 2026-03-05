@@ -360,6 +360,15 @@ display: none;
 <pre class="r"><code>library(writexl)
 library(here)</code></pre>
 <pre><code>## here() starts at /projects/imb-pkbphil/sp/sc_rnaseq/progenitor_scrnaseq</code></pre>
+<pre class="r"><code>library(dplyr)</code></pre>
+<pre><code>## 
+## Attaching package: &#39;dplyr&#39;</code></pre>
+<pre><code>## The following objects are masked from &#39;package:stats&#39;:
+## 
+##     filter, lag</code></pre>
+<pre><code>## The following objects are masked from &#39;package:base&#39;:
+## 
+##     intersect, setdiff, setequal, union</code></pre>
 <pre class="r"><code>i_am(&quot;figures/tables_supplemental.Rmd&quot;)</code></pre>
 <pre><code>## here() starts at /projects/imb-pkbphil/sp/sc_rnaseq/progenitor_scrnaseq</code></pre>
 <pre class="r"><code>input_tables = data.frame(
@@ -397,10 +406,14 @@ input_tables</code></pre>
 <pre class="r"><code>table_list &lt;- list()
 for (i in seq_len(nrow(input_tables))) {
     row &lt;- input_tables[i, ]
-    sheet_name &lt;- substr(paste(row$number, row$name), 1, 31)
-    table_list[[sheet_name]] &lt;- read.delim(
-        here(&quot;output&quot;, row$module, row$dataname, row$file)
-    )
+    sheet_name &lt;- substr(paste0(&quot;Table_S&quot;,row$number, &quot;_&quot;,row$name), 1, 31)
+    table = read.delim(  here(&quot;output&quot;, row$module, row$dataname, row$file))
+    if (grepl(&quot;ORA&quot;, row$file)){
+        table$Description = NULL
+    } else if (grepl(&quot;TSS_DE&quot;, row$name)){
+        table = select(table, cluster, p_val, avg_log2FC, pct.1,pct.2,p_val_adj,tss_id,gene_names,proximity,condition,time)
+    }
+    table_list[[sheet_name]] &lt;- table
 }
 write_xlsx(table_list, path = here(&quot;figures/tables_supplemental.xlsx&quot;), format_headers = TRUE)</code></pre>
 

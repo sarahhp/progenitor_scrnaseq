@@ -147,6 +147,9 @@ ggplot(mean_per_cluster, aes(y=initial_clusters, fill=pscondition, x=mean_pseudo
 ggsave(here(fig_dir, "wvb_violin_with_variance.png"), width = 9, height = 8)
 ```
 
+```{r}
+rm(monocleb, monoclew)
+```
 
 ## C: G2G trajectory comparison
 ```{r}
@@ -155,6 +158,21 @@ g2g_dataname =  paste0(dataname , "_g2g")
 
 ![tagln](`r here(fig_dir,g2g_dataname, "P:r1@TAGLN_alignment.png")`)
 ![plin1](`r here(fig_dir,g2g_dataname, "P:r1@PLIN1_alignment.png")`)
+
+### inset small UMAPs
+```{r}
+sbs = readRDS(here(odir, "complete_analysis.rds"))
+sbs
+```
+
+
+```{r C_inset_umaps}
+FeaturePlot(sbs, "P:r1@TAGLN", max.cutoff = 2, raster = T, raster.dpi = c(300,300))  + theme_hp
+FeaturePlot(sbs, "P:r1@PLIN1", max.cutoff = 2, raster=T, raster.dpi = c(300,300))  + theme_hp
+```
+```{r}
+rm(sbs)
+```
 
 
 # Beige vs white

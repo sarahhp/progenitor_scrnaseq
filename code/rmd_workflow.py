@@ -845,7 +845,29 @@ rule figure6:
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
     shell:
-        "{params.cmd}"        
+        "{params.cmd}"     
+        
+rule collate_supp_tables:
+    input:
+        tables2to9 = ["output/progenitors/initial/ORA_donor_marker_genes.txt", 
+                "output/progenitors/rpca/marker_genes.txt", 
+                "output/progenitors/rpca/ORA_marker_genes.txt", 
+                "output/adipogenesis/white_only_downsample/marker_genes.txt", 
+                "output/beige_vs_white/downsample/DE_per_cluster_white_vs_beige.tsv",
+                "output/beige_vs_white/tss_bvw_initial/DE_per_cluster_wvb.tsv",
+                "output/beige_vs_white/tss_fastmnn/g2g_alignment_genes.tsv", 
+                "output/beige_vs_white/bvw_fastmnn/g2g_alignment_genes.tsv"]
+        rmd = "figures/tables_supplemental.Rmd"
+    output:
+        report = "figures/tables_supplemental.html"
+        xl = "figures/tables_supplemental.xlsx"
+    params:
+        cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
+    shell:
+        "{params.cmd}"  
+        
+        
+        
 ##To do: add supplemental tables xl creator (Rmd) to snakemake workflwo
 SUPP_FIGS = [
      #"figures/supp_figS1_progenitors_unintegrated.html",
@@ -868,7 +890,8 @@ rule all:
         "figures/figure4_adipogenesis.html",
         "figures/figure5_beige_vs_white.html",
         "figures/figure6_early_adipogenic_trajectories.html",
-        SUPP_FIGS
+        SUPP_FIGS,
+        "figures/tables_supplemental.xlsx"
 
 
 

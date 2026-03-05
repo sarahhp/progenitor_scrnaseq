@@ -9,6 +9,7 @@ output: html_document
 ```{r}
 library(writexl)
 library(here)
+library(dplyr)
 i_am("figures/tables_supplemental.Rmd")
 ```
 
@@ -28,17 +29,21 @@ input_tables = data.frame(
     
 )
 input_tables
-
+cat(paste("\"output",sep="/",input_tables$module, input_tables$dataname, paste0(input_tables$file,"\",")))
 ```
 
 ```{r}
 table_list <- list()
 for (i in seq_len(nrow(input_tables))) {
     row <- input_tables[i, ]
-    sheet_name <- substr(paste(row$number, row$name), 1, 31)
-    table_list[[sheet_name]] <- read.delim(
-        here("output", row$module, row$dataname, row$file)
-    )
+    sheet_name <- substr(paste0("Table_S",row$number, "_",row$name), 1, 31)
+    table = read.delim(  here("output", row$module, row$dataname, row$file))
+    if (grepl("ORA", row$file)){
+        table$Description = NULL
+    } else if (grepl("TSS_DE", row$name)){
+        table = select(table, cluster, p_val, avg_log2FC, pct.1,pct.2,p_val_adj,tss_id,gene_names,proximity,condition,time)
+    }
+    table_list[[sheet_name]] <- table
 }
 write_xlsx(table_list, path = here("figures/tables_supplemental.xlsx"), format_headers = TRUE)
 ```
