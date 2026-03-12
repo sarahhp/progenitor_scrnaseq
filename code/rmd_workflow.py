@@ -1,4 +1,4 @@
-"""   """
+
 
 __author__ = "Sarah Hazell Pickering (s.h.pickering@medisin.uio.no)"
 __date__ = "2026-01-12"
@@ -856,10 +856,10 @@ rule collate_supp_tables:
                 "output/beige_vs_white/downsample/DE_per_cluster_white_vs_beige.tsv",
                 "output/beige_vs_white/tss_bvw_initial/DE_per_cluster_wvb.tsv",
                 "output/beige_vs_white/tss_fastmnn/g2g_alignment_genes.tsv", 
-                "output/beige_vs_white/bvw_fastmnn/g2g_alignment_genes.tsv"]
+                "output/beige_vs_white/bvw_fastmnn/g2g_alignment_genes.tsv"],
         rmd = "figures/tables_supplemental.Rmd"
     output:
-        report = "figures/tables_supplemental.html"
+        report = "figures/tables_supplemental.html",
         xl = "figures/tables_supplemental.xlsx"
     params:
         cmd = lambda wildcards, input: RENDER_RMD.format(input.rmd)
@@ -873,8 +873,8 @@ SUPP_FIGS = [
      #"figures/supp_figS1_progenitors_unintegrated.html",
      "figures/supp_figS2_progenitor_integration_trial.html",
      "figures/supp_figS3_S4_progenitors.html",
-    # "figures/supp_figS6_beige_vs_white-gene_level.html",
-     
+    # "figures/supp_figS7_beige_vs_white-gene_level.html",
+    #"figures/supp_figS8_S9_beige_vs_white-gene_level.html" 
      "figures/supp_figS10_tss_integration_trial.html",
      #"figures/supp_figS11_bvw_integration_trial.html",
      

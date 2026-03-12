@@ -1,0 +1,255 @@
+---
+title: "supp_figS9_beige_vs_white-TSS_level"
+author: "Sarah Hazell Pickering"
+date: "2026-01-15"
+output: html_document
+---
+
+Beige vs White early adipogenesis analyed at the TSS level
+
+```{r libs, message=FALSE, warning=FALSE}
+library(BPCells)
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+library(here)
+library(tidyr)
+library(ComplexHeatmap)
+```
+
+#setup
+```{r params}
+module = "beige_vs_white"
+dataname = "tss_bvw_initial"
+load_data = T #loading data
+subset_data = F
+
+rmd_filename = "supp_figS8_S9_beige_vs_white-TSS_level"
+i_am(file.path("figures", paste0(rmd_filename,".Rmd")))
+odir = here("output", module, dataname)
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank())
+theme_set(theme_hp)
+pal = c("#1F78B4","#85C2EA","#B3B3B3", "#F18486", "#E31A1C")
+clusters = tvthemes::gravityFalls_pal()(13)
+names(clusters) = paste0("t",0:12)
+cluster_levels = c("t7","t1","t11","t10","t3","t8","t9","t0","t6","t5","t2","t4")
+spectral = rev(RColorBrewer::brewer.pal(n = 11, name = 'Spectral'))
+```
+
+## Read data
+
+```{r}
+if (subset_data){
+  sbs = readRDS(here(odir, "10%_complete_analysis.rds"))
+} else {
+  sbs = readRDS(here(odir, "complete_analysis.rds"))
+  DefaultAssay(sbs) = "RNA"
+}
+Idents(sbs) = "seurat_clusters"
+sbs
+all.genes = row.names(sbs)
+table(Idents(sbs))
+```
+
+
+# Supp Figure S8 PPARG
+
+```{r}
+pparg = FetchData(sbs, c("P:r1@PPARG","P:r2@PPARG"), layer = "data")
+colnames(pparg) = c("pparg1","pparg2")
+pparg$ratio = (pparg$pparg2+0.5)/(pparg$pparg1+0.5)
+summary(pparg$ratio)
+summary(log2(pparg$ratio))
+sbs$pparg_logratio = log2(pparg$ratio)
+sbs$pparg_ratio = pparg$ratio
+FeaturePlot(sbs,c("P:r1@PPARG","P:r2@PPARG", "pparg_logratio", "pparg_ratio"), order = T) & scale_colour_gradientn(colours=spectral)
+RidgePlot(sbs,c("P:r1@PPARG", "P:r2@PPARG"), stack=T, group.by = "condition")
+RidgePlot(sbs,c("P:r1@PPARG", "P:r2@PPARG"), stack=T, fill.by="ident", cols = clusters)
+```
+
+```{r S8_A,B_pparg_isoforms}
+FeaturePlot(sbs,c("P:r1@PPARG")) & scale_colour_gradientn(colours=spectral) & theme_hp
+FeaturePlot(sbs,c("P:r2@PPARG")) & scale_colour_gradientn(colours=spectral)& theme_hp
+```
+
+# Supp Figure S9 : TSS level Differential expression
+
+## A: Marker Gene plot
+
+```{r}
+norm.markers = read.delim(here(odir, "marker_genes.txt"))
+norm.markers$cluster = factor(norm.markers$cluster, levels=0:max(as.integer(norm.markers$cluster)))
+head(norm.markers)
+
+filt.markers = as.data.frame(norm.markers %>% filter( pct.1 > 0.5) %>%
+    arrange(avg_log2FC)) %>% mutate(cluster = factor(paste0("t",cluster), levels=cluster_levels))
+```
+
+Add major time per cluster
+```{r}
+tcomp = read.delim(here(odir, "cluster_composition_condition_time.tsv"))
+tcomp$seurat_clusters = factor(paste0("t",tcomp$seurat_clusters), levels=cluster_levels)
+time_per_cluster = group_by(tcomp, seurat_clusters, time) %>% summarise(n_cells = sum(n_cells)) %>% 
+  slice_max(n=1, order_by = n_cells) %>% select(seurat_clusters, time)
+time_per_cluster
+filt.markers = merge(filt.markers, time_per_cluster, by.x="cluster", by.y="seurat_clusters")
+head(filt.markers)
+```
+
+```{r}
+top.markers = as.data.frame(filt.markers %>% group_by(time,cluster) %>%
+    slice_max(n = 2, order_by = avg_log2FC))
+top.markers
+```
+
+
+### plot
+```{r S9_Amarker_gene_by_time}
+top.markers$gene = factor(top.markers$gene, levels=rev(unique(top.markers$gene)))
+overlap.to.plot = filter(top.markers, gene %in% top.markers$gene)
+overlap.to.plot$gene = factor(overlap.to.plot$gene, levels=levels(top.markers$gene))
+
+ggplot(overlap.to.plot, aes(y=gene, size=abs(avg_log2FC), color=cluster,
+                    x=cluster)) + 
+    geom_point(colour="black",aes(size = avg_log2FC*1.5)) + geom_point() +
+    scale_color_manual(values=clusters, guide="none") + 
+    facet_grid(~time, scales="free_x", space="free_x") +
+    scale_x_discrete() +
+    labs(size="Mean\nlog_2FC", x= "TSS clusters", y="Marker genes")
+    
+```
+
+
+## B GO heatmap
+
+
+```{r}
+go_matrix = read.delim(here(odir, "ORA_marker_gene_expression_matrix.tsv"), )
+go_matrix = data.matrix(go_matrix)
+go_matrix[1:4,1:4]
+cell_ids = sbs@meta.data[gsub("\\.1$","-1",colnames(go_matrix)), c("time","seurat_clusters")]
+cell_ids$seurat_clusters = factor(paste0("t",cell_ids$seurat_clusters), , levels=cluster_levels )
+```
+
+
+```{r go_replace}
+phrases= read.delim(here("data/gene_sets/abbreviations.txt"))
+recap= read.delim(here("data/gene_sets/capitalisations.txt"))
+```
+
+
+```{r abrev_go}
+drama_shorten = function(ont) {
+  for (x in 1:nrow(phrases)){
+    ont = gsub( phrases$phrase[x],phrases$abbreviation[x], ont, ignore.case = T)
+  }
+  a = abbreviate(gsub("_"," ", gsub("^[[:alpha:]]*_","",tolower(ont))),minlength=41, dot=T, named = F)
+  a = stringr::str_to_sentence(a)
+  for (i in 1:nrow(recap))
+    a = gsub(sprintf("\\b%s\\b", recap$lowercase[i]),recap$capital[i],a, ignore.case = T)
+  return(a)
+}
+```
+## plot
+
+```{r S9_B_go_heatmap}
+rownames(go_matrix) = drama_shorten(rownames(go_matrix))
+ha = HeatmapAnnotation(cluster = cell_ids$seurat_clusters, col = list(cluster=clusters), show_legend = F,
+                       show_annotation_name = F)
+h =Heatmap(go_matrix, show_column_names = F, column_split = cell_ids$seurat_clusters, 
+        cluster_columns = F, show_heatmap_legend = F, top_annotation = ha, row_names_max_width = unit(9,"cm"))
+h
+```
+
+
+```{r S9_B_heatmap_legend}
+h =Heatmap(go_matrix, show_column_names = F, column_split = cell_ids$seurat_clusters, 
+        cluster_columns = F, top_annotation = ha, row_names_max_width = unit(9,"cm"), name="Average gene\n expression")
+h
+
+```
+
+
+## C: cells per cluster
+```{r cell_numbers_all}
+ggplot(tcomp, aes(x=seurat_clusters, y=n_cells, fill=cond.time)) + 
+    geom_bar(stat='identity', position="dodge") + facet_grid(~time, scales = "free_x", space="free_x") +
+    scale_fill_manual(values = pal,
+                      limits=c("white.day3","white.day1","asc.day0","beige.day1","beige.day3")) +
+    coord_cartesian(expand=F) + 
+    labs(x= "TSS clusters", y= "Number of cells", fill="Condition \n& time")
+```
+
+
+```{r S9_C_cell_numbers_min10cells}
+ggplot(filter(tcomp,n_cells > 10), aes(x=seurat_clusters, y=n_cells, fill=cond.time)) + 
+    geom_bar(stat='identity', position="dodge") + facet_grid(~time, scales = "free_x", space="free_x") +
+    scale_fill_manual(values = pal,
+                      limits=c("white.day3","white.day1","asc.day0","beige.day1","beige.day3")) +
+    coord_cartesian(expand=F) + 
+    labs(x= "TSS clusters", y= "Number of cells", fill="Condition \n& time")
+```
+
+
+## D: Beige vs white Volcano plots 
+### per time
+### scRNAseq
+
+```{r}
+day1_test = read.delim(here(odir, "DE_day1_wvb.tsv"))
+day3_test = read.delim(here(odir, "DE_day3_wvb.tsv"))
+```
+
+```{r S9_D_upper_day1_volcano}
+ggplot(filter(day1_test, proximity=="P"), aes(x=avg_log2FC, y=-log10(p_val), colour=sig_cond)) + geom_point(size=0.5) + 
+  geom_text_repel(data = filter(day1_test, proximity=="P" & sig == "sig") %>% slice_min(n=10, order_by = p_val), 
+                  aes(label=feature_name), show.legend = F) + 
+  scale_colour_manual(values=c(pal[4],"black",pal[2])) + guides(colour = guide_legend(override.aes = list(size = 2)))  +
+  ggtitle("day1") + coord_cartesian(x=c(-1.2,1.2))
+
+ggplot(day1_test, aes(x=avg_log2FC, y=-log10(p_val), colour=sig_cond)) + geom_point(size=0.5) + 
+  geom_text_repel(data = slice_min(day1_test, n=70, order_by = p_val), aes(label=feature_name)) + 
+  scale_colour_manual(values=c(pal[4],"black",pal[2])) + guides(colour = guide_legend(override.aes = list(size = 2))) +
+  ggtitle("day1 zoom") + coord_cartesian(x=c(-1.1,1.1), y=c(0, 100))
+```
+
+
+```{r D_lower_day3_volcano}
+ggplot(day3_test, aes(x=avg_log2FC, y=-log10(p_val), colour=sig_cond)) + geom_point(size=0.5) + 
+  geom_text_repel(data = slice_min(day3_test, n=20, order_by = p_val), aes(label=feature_name), show.legend = F) + 
+  scale_colour_manual(values=c(pal[5],"black",pal[1])) + guides(colour = guide_legend(override.aes = list(size = 2)))  +
+  ggtitle("day3") + coord_cartesian(x=c(-1,1))
+
+ggplot(day3_test, aes(x=avg_log2FC, y=-log10(p_val), colour=sig_cond)) + geom_point(size=0.5) + 
+  geom_text_repel(data = slice_min(day3_test, n=70, order_by = p_val), aes(label=feature_name)) + 
+  scale_colour_manual(values=c(pal[5],"black",pal[1])) + guides(colour = guide_legend(override.aes = list(size = 2))) +
+  ggtitle("day3 zoom") + coord_cartesian(x=c(-1,1), y=c(0, 100)) 
+```
+
+## E : DE per cluster isoform types
+
+```{r}
+per_cluster = read.delim(here(odir, "DE_per_cluster_wvb.tsv"))
+head(per_cluster)
+```
+
+Need to knit genic names :P 

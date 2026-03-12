@@ -131,7 +131,7 @@ p
 ```
 
 
-## B: White vs beige violin
+## B:Violin  White vs beige violin
 ```{r Bwvb_violin}
 mean_per_cluster$cluster.pscond = paste(mean_per_cluster$initial_clusters, sep=".",mean_per_cluster$pscondition)
 ggplot(mean_per_cluster, aes(y=initial_clusters, fill=pscondition, x=mean_pseudotime))+
