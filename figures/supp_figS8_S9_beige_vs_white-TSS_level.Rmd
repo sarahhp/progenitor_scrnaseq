@@ -5,17 +5,18 @@ date: "2026-01-15"
 output: html_document
 ---
 
-Beige vs White early adipogenesis analyed at the TSS level
+Beige vs White early adipogenesis analysed at the TSS level
 
 ```{r libs, message=FALSE, warning=FALSE}
 library(BPCells)
 library(Seurat)
-library(dplyr)
+
 library(ggplot2)
 library(ggrepel)
 library(here)
 library(tidyr)
 library(ComplexHeatmap)
+library(dplyr)
 ```
 
 #setup
@@ -109,7 +110,7 @@ Add major time per cluster
 tcomp = read.delim(here(odir, "cluster_composition_condition_time.tsv"))
 tcomp$seurat_clusters = factor(paste0("t",tcomp$seurat_clusters), levels=cluster_levels)
 time_per_cluster = group_by(tcomp, seurat_clusters, time) %>% summarise(n_cells = sum(n_cells)) %>% 
-  slice_max(n=1, order_by = n_cells) %>% select(seurat_clusters, time)
+  slice_max(n=1, order_by = n_cells) %>% dplyr::select(seurat_clusters, time)
 time_per_cluster
 filt.markers = merge(filt.markers, time_per_cluster, by.x="cluster", by.y="seurat_clusters")
 head(filt.markers)
@@ -248,8 +249,14 @@ ggplot(day3_test, aes(x=avg_log2FC, y=-log10(p_val), colour=sig_cond)) + geom_po
 ## E : DE per cluster isoform types
 
 ```{r}
-per_cluster = read.delim(here(odir, "DE_per_cluster_wvb.tsv"))
-head(per_cluster)
+ann.wvb= read.delim(here(odir, "DE_per_cluster_wvb.formatted.tsv"))
 ```
 
-Need to knit genic names :P 
+```{r S9_E_isoform_types}
+ggplot(ann.wvb, aes(x=cluster, fill=tss_class)) + geom_bar() + scale_fill_npg() +
+    facet_grid(condition~time, scales = "free", space = "free_x") +
+    labs(y="Differentially expressed TSSs",x="TSS cluster",fill="TSS class") +
+        scale_y_continuous(expand = expansion(mult=c(0, 0.05))) 
+```
+
+

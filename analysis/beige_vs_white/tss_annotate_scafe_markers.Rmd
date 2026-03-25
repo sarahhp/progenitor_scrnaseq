@@ -1,0 +1,151 @@
+---
+title: "tss_annotate_scafe_markers"
+author: "Sarah Hazell Pickering"
+date: "2024-05-15"
+output: html_document
+---
+
+# Setup
+
+```{r libs, message=FALSE, warning=FALSE}
+library(dplyr)
+library(here)
+library(tidyr)
+library(ggplot2)
+library(ggsci)
+```
+
+```{r params}
+module = "beige_vs_white"
+dataname = "tss_bvw_initial"
+load_data = T
+subset_data = F
+
+rmd_filename = "tss_annotate_scafe_markers"
+i_am(file.path("analysis", module, paste0(rmd_filename,".Rmd")))
+odir = here('output',module, dataname)
+
+```
+
+
+```{r setup}
+set.seed(8)
+fig_dir = here("analysis", module, "figures", rmd_filename)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"),
+                      dev = c("png","pdf"))
+
+if (!dir.exists(odir)) dir.create(odir, recursive = TRUE)
+```
+
+
+```{r themes}
+theme_hp = theme_classic(base_size = 15) +
+  theme(axis.line = element_line(linewidth = 0.25),
+        axis.ticks = element_line(linewidth = 0.25),
+        strip.background = element_blank(),
+        panel.border=element_rect(colour="lightgrey", fill=NA) )
+theme_set(theme_hp)
+pal = c("#1F78B4", "#85C2EA", "#B3B3B3", "#F18486", "#E31A1C")
+clusters = tvthemes::gravityFalls_pal()(13)
+```
+
+# Load info about each CRE
+```{r}
+new_mapping = read.delim(here("data/scafe/aggr_default_model/annotate/day0_to_day3_rep1/day0_to_day3_rep1.CRE.info.formatted.tsv"))
+new_mapping$simple_id = gsub("r[0-9]*@ADDG[0-9]*\\.[A-Z],","",
+                             gsub(",r[0-9]*@ADDG[0-9]*\\.[A-Z]$","",new_mapping$CREName))
+head(new_mapping[c("CREName","new_CREName","gene_name","simple_id","regionOritentation")])
+```
+
+# Load cluster markers
+
+```{r}
+norm.markers = read.delim(here(odir,"marker_genes.txt"))
+head(norm.markers); nrow(norm.markers)
+norm.markers[grep("ADDG", norm.markers$simple_id),][1:10,]
+```
+
+```{r}
+ann.markers = merge(new_mapping[c("new_CREName","gene_name","simple_id", "CREID")],
+                    norm.markers, 
+                    by="simple_id") %>% arrange(p_val_adj,cluster, abs(avg_log2FC)) %>%
+  mutate(tss_number = gsub("[PD]:r","",gsub("@.*","",new_CREName)),
+         regionType = if_else(grepl("intron", new_CREName), "intron",
+                          if_else(grepl("exon", new_CREName), "exon",
+                          if_else(grepl("ADDG[0-9][0-9MXY][0-9]*\\.[BFR]", new_CREName), "intergenic",
+                              "promoter"))))
+ann.markers = mutate(ann.markers, regionOrientation = 
+                       if_else(regionType == "promoter", "ss",
+                               if_else(regionType == "intergenic", "ns",
+                                       gsub("_.*","",gsub(".*@(intron|exon)_","",new_CREName)))))
+head(ann.markers)
+nrow(ann.markers)
+```
+
+## Stats on intron/exon intergenic genes
+
+```{r}
+sig = filter(ann.markers, p_val_adj < 0.01 & abs(avg_log2FC) > 0.25 & pct.1 > 0.1)
+nrow(sig)
+table(sig$regionType)
+table(sig$proximity)
+table(sig$tss_number)
+table(sig$regionOrientation[sig$regionType != "promoter"]) 
+table(sig$regionOrientation[sig$regionType =="exon"]) 
+table(sig$regionOrientation[sig$regionType == "intron"]) 
+```
+
+It's slightly more antisense exons than sense strand ones.  For introns - much less of these are significant slightly more sense strand.  
+
+```{r}
+write.table(ann.markers, file=here(odir, "marker.genes.formatted.tsv"),
+            sep="\t",row.names = F, quote = F)
+```
+
+# White vs beige annotation
+
+```{r}
+wvb = read.delim(here(odir,"DE_per_cluster_wvb.tsv"))
+head(wvb)
+```
+
+
+```{r}
+ann.wvb = merge(new_mapping[c("new_CREName","gene_name","simple_id", "CREID","codingClassStr")], 
+                wvb[grep("gene_names", invert = T, colnames(wvb))],
+                by.x="simple_id", by.y="tss_id") %>% 
+  arrange(p_val_adj,cluster, desc(abs(avg_log2FC))) %>%
+  mutate(tss_number = gsub("[PD]:r","",gsub("@.*","",new_CREName)),
+         regionType = if_else(grepl("intron", new_CREName), "intron",
+                          if_else(grepl("exon", new_CREName), "exon",
+                          if_else(grepl("ADDG[0-9][0-9MXY][0-9]*\\.[BFR]", new_CREName), "intergenic",
+                              "promoter"))),
+         tss_class = gsub(";.*", "",codingClassStr))
+ann.wvb = mutate(ann.wvb, regionOrientation = 
+                       if_else(regionType == "promoter", "ss",
+                               if_else(regionType == "intergenic", "ns",
+                                       gsub("_.*","",gsub(".*@(intron|exon)_","",new_CREName)))))
+head(ann.wvb)
+```
+
+```{r}
+table(ann.wvb$regionType)
+table(ann.wvb$regionOrientation[ann.wvb$regionType =="exon"]) 
+table(ann.wvb$regionOrientation[ann.wvb$regionType == "intron"]) 
+```
+
+```{r}
+ggplot(ann.wvb, aes(x=cluster, fill=tss_class)) + geom_bar() + scale_fill_npg() +
+    facet_grid(condition~time, scales = "free", space = "free_x") +
+    labs(y="Differentially expressed TSSs",x="TSS cluster",fill="TSS class") +
+        scale_y_continuous(expand = expansion(mult=c(0, 0.05))) 
+```
+
+
+```{r}
+write.table(ann.wvb, file=here(odir, "DE_per_cluster_wvb.formatted.tsv"),
+            sep="\t",row.names = F, quote = F)
+```
+
+
