@@ -17,6 +17,7 @@ library(here)
 library(tidyr)
 library(ComplexHeatmap)
 library(dplyr)
+library(ggsci)
 ```
 
 #setup
