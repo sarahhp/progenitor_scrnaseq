@@ -73,6 +73,10 @@ for (red in names(ref@reductions)){
 ref
 head(ref@meta.data)
 ```
+```{r}
+FeaturePlot(ref, "ENSG00000110651"#CD81
+            )
+```
 
 
 ## Convert ensembl ids
