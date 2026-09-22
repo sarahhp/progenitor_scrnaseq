@@ -57,6 +57,11 @@ Day 3 white ->  day 0 -> day3 beige
 
 # Figure Index
 
+## Figure 1
+![Figure1B](analysis/bulk/figures/bulk_day15_GO/day15_GSEA_top2pfilt-1.png)
+![Figure1C](analysis/bulk/figures/bulk_day15_UCP1_expr/UCP1.CIDEA.CITED1.PM20D1_RNA_expr_two_stats.pdf)
+![Figure1D](analysis/bulk/figures/bulk_day15_mitopathways/MitoPathways_GSEA_top3filt-3.png)
+
 ## Figure 4
 
 ![Figure4B](docs/figure/white_only_downsample_markers.Rmd/umap-1.png)
