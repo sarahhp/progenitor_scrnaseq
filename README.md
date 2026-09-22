@@ -56,11 +56,23 @@ Day 3 white ->  day 0 -> day3 beige
 
 
 # Figure Index
+Access to raw figures from the manuscript. Aesthetic formatting has been applied when mounting for the manuscript (e.g. figure size, axis titles) but no data has been changed.   
 
 ## Figure 1
-![Figure1B](analysis/bulk/figures/bulk_day15_GO/day15_GSEA_top2pfilt-1.png)
+### Thermogenic programs in beige adipocytes are subject-specific  
+
+![Figure1B](analysis/bulk/figures/bulk_day15_GO/day15_GSEA_top2pfilt-1.pdf)
 ![Figure1C](analysis/bulk/figures/bulk_day15_UCP1_expr/UCP1.CIDEA.CITED1.PM20D1_RNA_expr_two_stats.pdf)
-![Figure1D](analysis/bulk/figures/bulk_day15_mitopathways/MitoPathways_GSEA_top3filt-3.png)
+![Figure1D](analysis/bulk/figures/bulk_day15_mitopathways/MitoPathways_GSEA_top3filt-3.pdf)
+![Figure1E](analysis/bulk/figures/bulk_day15_mitopathways/NonCanonicalTherm_heatmap.pdf)
+![Figure1F](analysis/bulk/figures/bulk_day15_mitopathways/OXPHOS_complexes_heatmap.pdf)
+
+## Figure 2
+### Figure 2: Adipose progenitors display subject-specific transcriptomes by scRNA-seq. 
+
+![Figure2B](figures/figure2_progenitors_initial/B_umap_subjects-1.pdf)
+![Figure2C](figures/figure2_progenitors_initial/C_cluster_composition-1.pdf)
+![Figure2D](figures/figure2_progenitors_initial/D_umap_clusters-1.png)
 
 ## Figure 4
 
