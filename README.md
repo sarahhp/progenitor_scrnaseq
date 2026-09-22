@@ -61,35 +61,98 @@ Access to raw figures from the manuscript. Aesthetic formatting has been applied
 ## Figure 1
 ### Thermogenic programs in beige adipocytes are subject-specific  
 
-![Figure1B](analysis/bulk/figures/bulk_day15_GO/day15_GSEA_top2pfilt-1.pdf)
-![Figure1C](analysis/bulk/figures/bulk_day15_UCP1_expr/UCP1.CIDEA.CITED1.PM20D1_RNA_expr_two_stats.pdf)
-![Figure1D](analysis/bulk/figures/bulk_day15_mitopathways/MitoPathways_GSEA_top3filt-3.pdf)
-![Figure1E](analysis/bulk/figures/bulk_day15_mitopathways/NonCanonicalTherm_heatmap.pdf)
-![Figure1F](analysis/bulk/figures/bulk_day15_mitopathways/OXPHOS_complexes_heatmap.pdf)
+[Figure1B](analysis/bulk/figures/bulk_day15_GO/day15_GSEA_top2pfilt-1.pdf)
+[Figure1C](analysis/bulk/figures/bulk_day15_UCP1_expr/UCP1.CIDEA.CITED1.PM20D1_RNA_expr_two_stats.pdf)
+[Figure1D](analysis/bulk/figures/bulk_day15_mitopathways/MitoPathways_GSEA_top3filt-3.pdf)
+[Figure1E](analysis/bulk/figures/bulk_day15_mitopathways/NonCanonicalTherm_heatmap.pdf)
+[Figure1F](analysis/bulk/figures/bulk_day15_mitopathways/OXPHOS_complexes_heatmap.pdf)
 
 ## Figure 2
 ### Figure 2: Adipose progenitors display subject-specific transcriptomes by scRNA-seq. 
 
-![Figure2B](figures/figure2_progenitors_initial/B_umap_subjects-1.pdf)
-![Figure2C](figures/figure2_progenitors_initial/C_cluster_composition-1.pdf)
-![Figure2D](figures/figure2_progenitors_initial/D_umap_clusters-1.png)
+[Figure2B](figures/figure2_progenitors_initial/B_umap_subjects-1.pdf)
+[Figure2C](figures/figure2_progenitors_initial/C_cluster_composition-1.pdf)
+[Figure2D](figures/figure2_progenitors_initial/D_umap_clusters-1.pdf)
+[Figure2E](figures/figure2_progenitors_initial/E_cluster_go_terms-1.pdf)
+[Figure2F](figures/figure2_progenitors_initial/F_donor_GO_top3-1.pdf)
+
+## Figure 3
+### Integrated progenitor transcriptomes
+
+[Figure3A](figures/figure3_progenitors_integrated/A_umap-1.pdf)
+[Figure3B](figures/figure3_progenitors_integrated/marker_genes-1.pdf)
+[Figure3C](figures/figure3_progenitors_integrated/cluster_go_unique-1.pdf)
+[Figure3D](figures/figure3_progenitors_integrated/D_cluster_composition_boxplot-1.pdf)
 
 ## Figure 4
 
-![Figure4B](docs/figure/white_only_downsample_markers.Rmd/umap-1.png)
-![Figure4D](docs/figure/white_only_downsample_markers.Rmd/umap-2.png)
-![Figure4x]("docs/figure/white_only_downsample_emont.Rmd/filt_emont_cell_type-1.png")
-![Figure4x]("output/adipogenesis/white_only_downsample/lazarescu/plots/lazarescu_celltype_with_uncertainty.png")
+[Figure4B](figures/figure4_adipogenesis/umap-1.pdf)
+[Figure4C](figures/figure4_adipogenesis/umap-2.pdf)
+[Figure4D](figures/figure4_adipogenesis/unnamed-chunk-3-1.pdf)
+[Figure4E](figures/figure4_adipogenesis/go_heatmap-1.pdf)
+[Figure4E legend](figures/figure4_adipogenesis/heatmap_legend-1.pdf)
+
+## Figure 5
+### Beige versus white adipogenesis
+
+[Figure5B](figures/figure5_beige_vs_white/B_wvb_proportion_test-1.pdf)
+[Figure5C](figures/figure5_beige_vs_white/C_nomt_de_per_cluster-1.pdf)
+[Figure5D](figures/figure5_beige_vs_white/D_umap_time-1.pdf)
+[Figure5E](figures/figure5_beige_vs_white/E_wvb_proportion_test-1.pdf)
+[Figure5F](figures/figure5_beige_vs_white/F_top_markers_include_all-1.pdf)
+[Figure5H](figures/figure5_beige_vs_white/H_toptss_bvw-1.pdf)
+
+## Figure 7
+### ICAM1-associated progenitor and adipogenesis analyses
+
+[Figure7A](figures/figure7_icam1/progenitors_rpca-1.pdf)
+[Figure7B](figures/figure7_icam1/progenitors_rpca-2.pdf)
+[Figure7C](figures/figure7_icam1/white_only_adipogenesis-1.pdf)
+[Figure7D](figures/figure7_icam1/white_only_adipogenesis-2.pdf)
+
+## Supplementary Figures
+
+### Supplementary Figure S2
+[Supplementary Figure S2](figures/supp_figS2_progenitor_integration_trial/all_plots-1.pdf)
+
+### Supplementary Figures S3-S4
+[Supplementary Figure S3](figures/supp_figS3_S4_progenitors/3A_clustree-1.pdf)
+[Supplementary Figure S4](figures/supp_figS3_S4_progenitors/4C_main_phasescatter-1.pdf)
+
+### Supplementary Figure S6
+[Supplementary Figure S6A](figures/supp_figS6_adipogenesis/Apca-1.pdf)
+[Supplementary Figure S6B](figures/supp_figS6_adipogenesis/Btop_markers_logfc_pct1-1.pdf)
+[Supplementary Figure S6C](figures/supp_figS6_adipogenesis/Cemont_annot-1.pdf)
+
+### Supplementary Figure S7
+[Supplementary Figure S7B](figures/supp_figS7_beige_vs_white-gene_level/B_umap-1.pdf)
+[Supplementary Figure S7E](figures/supp_figS7_beige_vs_white-gene_level/E_wvb_proportion_test-1.pdf)
+[Supplementary Figure S7F](figures/supp_figS7_beige_vs_white-gene_level/F_upper_day1_volcano-1.pdf)
+
+### Supplementary Figures S8-S9
+[Supplementary Figure S8](figures/supp_figS8_S9_beige_vs_white-TSS_level/S8_A,B_pparg_isoforms-1.pdf)
+[Supplementary Figure S9A](figures/supp_figS8_S9_beige_vs_white-TSS_level/S9_Amarker_gene_by_time-1.pdf)
+[Supplementary Figure S9B](figures/supp_figS8_S9_beige_vs_white-TSS_level/S9_B_go_heatmap-1.pdf)
+[Supplementary Figure S9C](figures/supp_figS8_S9_beige_vs_white-TSS_level/S9_C_cell_numbers_min10cells-1.pdf)
+[Supplementary Figure S9D](figures/supp_figS8_S9_beige_vs_white-TSS_level/S9_D_upper_day1_volcano-1.pdf)
+[Supplementary Figure S9E](figures/supp_figS8_S9_beige_vs_white-TSS_level/S9_E_isoform_types-1.pdf)
+
+### Supplementary Figure S10
+[Supplementary Figure S10](figures/supp_figS10_tss_integration_trial/all_plots-1.pdf)
+
+### Supplementary Figure S11
+[Supplementary Figure S11A](figures/supp_figS11_bvw_trajectory/A_integration_trial_clusters-2.pdf)
+[Supplementary Figure S11B](figures/supp_figS11_bvw_trajectory/B_white_monocle_umap-1.pdf)
+[Supplementary Figure S11C](figures/supp_figS11_bvw_trajectory/C_wvb_violin-1.pdf)
 
 
 ## Figure 6
 
 
-![Figure 6F-velocity]("docs/figure/white_only_fastmnn_velociraptor_dynamical.Rmd/tsne_velocity_prog_cols-1.png)
-
-![Figure 6F-monocle]("docs/figure/white_only_fastmnn_progenitor_trajectory_markers.Rmd/tsne_monocle_prog_cols-1.png")
-
-![Figure 6E]("docs/figure/white_only_fastmnn_progenitor_trajectory_markers/velocity_monocle_flipped-1.png")
+[Figure 6E](figures/figure6_early_adipogenic_trajectories/E_RNAvelocity-1.pdf)
+[Figure 6F velocity](figures/figure6_early_adipogenic_trajectories/Fbvw_prog_cols-1.pdf)
+[Figure 6F monocle](figures/figure6_early_adipogenic_trajectories/Dmonocle_split-1.pdf)
+[Figure 6G](figures/figure6_early_adipogenic_trajectories/Gvelo_violin-1.pdf)
 
 
 # Analysis workflows
